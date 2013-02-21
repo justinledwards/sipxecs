@@ -34,22 +34,20 @@ import org.sipfoundry.sipxconfig.feature.FeatureManager;
 
 public class MongoConfig implements ConfigProvider {
     private MongoManager m_mongoManager;
-    private MongoReplicaSetManager m_mongoReplicaSetManager;
 
     @Override
     public void replicate(ConfigManager manager, ConfigRequest request) throws IOException {
-        if (!request.applies(MongoManager.FEATURE_ID, LocationsManager.FEATURE, MongoManager.ARBITER_FEATURE)) {
+        if (!request.applies(MongoManager.FEATURE_ID, LocationsManager.FEATURE, MongoManager.ARBITER_FEATURE,
+                MongoManager.ACTIVE_ARBITER, MongoManager.ACTIVE_DATABASE)) {
             return;
         }
         FeatureManager fm = manager.getFeatureManager();
         Location[] all = manager.getLocationManager().getLocations();
-        List<MongoServer> servers = m_mongoReplicaSetManager.getMongoServers(true, false);
         MongoSettings settings = m_mongoManager.getSettings();
-        int port = settings.getPort();
-        String connStr = getConnectionString(servers, port);
-        String connUrl = getConnectionUrl(servers, port);
+        List<Location> dbs = manager.getFeatureManager().getLocationsForEnabledFeature(MongoManager.ACTIVE_DATABASE);
+        String connStr = getConnectionString(dbs, settings.getPort());
+        String connUrl = getConnectionUrl(dbs, settings.getPort());
         for (Location location : all) {
-
             // CLIENT
             File dir = manager.getLocationDataDirectory(location);
             FileWriter client = new FileWriter(new File(dir, "mongo-client.ini"));
@@ -88,30 +86,26 @@ public class MongoConfig implements ConfigProvider {
         config.write("connectionString", connStr);
     }
 
-    String getConnectionString(List<MongoServer> servers, int port) {
+    String getConnectionString(List<Location> servers, int port) {
         StringBuilder r = new StringBuilder("sipxecs/");
         for (int i = 0; i < servers.size(); i++) {
-            MongoServer server = servers.get(i);
-            if (server.isServer()) {
-                if (i > 0) {
-                    r.append(',');
-                }
-                r.append(server.getName());
+            Location server = servers.get(i);
+            if (i > 0) {
+                r.append(',');
             }
+            r.append(server.getFqdn() + ':' + port);
         }
         return r.toString();
     }
 
-    String getConnectionUrl(List<MongoServer> servers, int port) {
+    String getConnectionUrl(List<Location> servers, int port) {
         StringBuilder r = new StringBuilder("mongodb://");
         for (int i = 0; i < servers.size(); i++) {
-            MongoServer server = servers.get(i);
-            if (server.isServer()) {
-                if (i > 0) {
-                    r.append(',');
-                }
-                r.append(server.getName());
+            Location server = servers.get(i);
+            if (i > 0) {
+                r.append(',');
             }
+            r.append(server.getFqdn() + ':' + port);
         }
         r.append("/?slaveOk=true");
         return r.toString();
@@ -119,9 +113,5 @@ public class MongoConfig implements ConfigProvider {
 
     public void setMongoManager(MongoManager mongoManager) {
         m_mongoManager = mongoManager;
-    }
-
-    public void setMongoReplicaSetManager(MongoReplicaSetManager mongoReplicaSetManager) {
-        m_mongoReplicaSetManager = mongoReplicaSetManager;
     }
 }

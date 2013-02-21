@@ -177,7 +177,7 @@ bundle agent mongodb_arbiter_running {
         comment => "start mongo arbiter",
         args => "start";
 
-    mongod_arbiter.mongo_arbiter_running.restart_mongo_arbiter::
+    mongod_arbiter.mongo_arbiter_running.(restart_mongo_arbiter|RESTART_ARBITER)::
       "$(service)"
         comment => "restart mongo arbiter",
         args => "restart";
@@ -210,7 +210,7 @@ bundle agent mongodb_sysv_running {
         comment => "start mongo",
         args => "start";
 
-    mongod.mongodb_running.restart_mongod::
+    mongod.mongodb_running.(restart_mongod|RESTART_DATABASE)::
       "$(service)"
         comment => "restart mongo",
         args => "restart";
@@ -244,7 +244,7 @@ bundle agent mongodb_systemctl_running {
         comment => "enable iptables",
         args => "enable $(service)";
 
-    mongod.mongodb_running.restart_mongod::
+    mongod.mongodb_running.(restart_mongod|RESTART_DATABASE)::
       "$(sipx.systemctl)"
         comment => "restart mongo",
         args => "restart $(service)";

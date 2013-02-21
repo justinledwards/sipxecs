@@ -41,7 +41,7 @@ public class MongoServer {
     private String m_optimeDate = NA;
     private String m_lastHeartbeat;
     private String m_pingMs;
-    private String m_errMsg = NA;
+    private String m_errMsg;
     private boolean m_configured;
     private boolean m_voting = true;
 

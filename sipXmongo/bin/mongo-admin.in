@@ -1,0 +1,146 @@
+#!/bin/env python
+
+# Mongo file system and configuration administration
+
+import sys
+import traceback
+import logging
+import argparse
+import os.path
+import commands
+import os
+
+ERR_FAILED_TO_START = 1
+ERR_FAILED_TO_REPAIR = 2
+
+class MongoAdminException(Exception):
+    def __init__(self, exit_code, value):
+        self.exit_code = exit_code
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
+
+    def code(self):
+        return self.exit_code
+
+REDHAT_CONFIG_FILE = "/etc/mongodb.conf"
+TENGEN_CONFIG_FILE = "/etc/mongod.conf"
+
+class MongoAdmin:
+
+    def __init__(self):
+        self.is_redhat = os.path.exists(REDHAT_CONFIG_FILE)
+        if self.is_redhat:
+            logging.debug("redhat detected")
+            self.cfg = REDHAT_CONFIG_FILE
+            self.user = 'mongodb'
+            self.group = 'mongodb'
+        else:
+            logging.debug("10gen installation detected")
+            self.cfg = TENGEN_CONFIG_FILE
+            self.user = 'mongod'
+            self.group = 'mongod'
+        ok, self.dbpath = commands.getstatusoutput('awk -F= \'/^dbpath *= */{print $2}\' "%s"' \
+             % self.cfg)
+        logging.debug("db path " + self.dbpath)
+        self.lockfile = self.dbpath + "/mongod.lock"
+
+    def cmd_obliterate(self, ignored):
+        # ignore err, maybe it wasn't running
+        os.system('/sbin/service mongod stop')
+        self.clearLockFile()
+
+        # be very careful not to recursively delete '/'
+        if len(self.dbpath.strip()) > 0:
+            os.system('/bin/rm -f %s/{,_tmp,journal}/*.*' % self.dbpath)
+
+        if os.system('/bin/chown %s:%s %s' % (self.user, self,group, self.dbpath)) != 0:
+            logging.warn('Could not change ownership of database files in %s' % self.dbpath)
+
+        if os.system('/sbin/service mongod start') != 0:
+            raise MongoAdminException('Could not start mongo server')
+
+    def cmd_repair(self, ignored):
+        self.clearLockFile()
+        if os.system("/bin/su -- %s /usr/bin/mongod --repair" % self.user) != 0:
+            raise MongoAdminException(ERR_FAILED_TO_REPAIR, "Could not repair database")
+
+    def down(self):
+        if os.system('/sbin/service mongod stop') != 0:
+          logging.debug('Could not stop mongod server, might be already down')
+
+    def up(self):
+        if os.system('/sbin/service mongod start') != 0:
+            raise MongoAdminException(ERR_FAILED_TO_START, 'Could not start '
+              'mongo after repairing')
+        
+    def cmd_autoRepair(self, ignored):
+        if os.path.exists(self.lockfile):
+            pidf = open(self.lockfile)
+            pid = str(pidf.read()).strip()
+            if os.path.exists('/proc/' + pid):
+                cmd_repair(ignored)
+                self.up()
+
+    def cmd_clearLocal(self, ignored):
+        self.down()
+        if len(self.dbpath.strip()) > 0:
+            os.system('/bin/rm -f %s/local.*' % self.dbpath)
+        self.up()
+
+    def clearLockFile(self):
+        if os.path.exists(self.lockfile):
+            os.remove(self.lockfile)
+
+if __name__ == '__main__':
+    # Parse arguments
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description='Mongo/sipXecs administration utility'
+        )
+    parser.formatter_class = argparse.ArgumentDefaultsHelpFormatter
+    parser.add_argument('--obliterate', action="store_true",
+                help='Wipe all database and replication information from this server')
+    parser.add_argument('--clearLocal',  action="store_true",
+                help='Clear only the local database which store replication configuration')
+    parser.add_argument('--autoRepair',  action="store_true",
+                help='Clear only the local database which store replication configuration')
+    parser.add_argument('--repair',  action="store_true",
+                help='Clear only the local database which store replication configuration')
+    parser.add_argument('--verbose', action="store_true", default=False,
+                help='verbose output')
+    args = vars(parser.parse_args())
+
+    try:
+        level = None
+        if args['verbose']:
+            level = logging.DEBUG        
+        logging.basicConfig(
+            level=level,
+            format='.%(message)s'
+        )
+
+        admin = MongoAdmin()
+        for op in args.keys():
+            params = args[op]
+            opMethod = "cmd_" + op
+            try :
+                member = getattr(admin, opMethod)
+                if member != None and params != False and params != None:
+                    logging.debug("%s", op)
+                    member(params)
+
+            except AttributeError as normal:
+                pass # many args will trigger this
+
+    except MongoAdminException as e:
+        print e
+        exit(e.code())
+
+    except :
+        print '-'*120
+        print sys.exc_info()
+        traceback.print_exc()
+        print '-'*120
+        exit(1)

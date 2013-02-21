@@ -1,4 +1,4 @@
-#
+#!/bin/bash
 
 # did mongod stop abruptly? then there's a good change database is
 # needs to be repaired. Repairing is normal, however, by definition

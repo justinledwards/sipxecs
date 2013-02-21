@@ -5,7 +5,8 @@ EXTRA_DIST = \
 	$(initd_SCRIPTS:=.in)
 
 bin_SCRIPTS = \
-	mongodb-repair
+	mongo-admin \
+	mongo-replication-admin
 
 initddir = @SIPX_SERVICEDIR@
 initd_SCRIPTS = \
