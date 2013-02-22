@@ -18,8 +18,14 @@ import java.util.List;
 import java.util.Map;
 
 public class MongoService {
-    public static final String PRIMARY = "PRIMARY";
-    public static final String SECONDARY = "SECONDARY";
+    public static enum State {
+        // states defined in http://docs.mongodb.org/manual/reference/replica-status/
+        STARTUP1, PRIMARY, SECONDARY, RECOVERING, FATAL_ERROR,
+        STARTUP2, UNKNOWN, ARBITER, DOWN, ROLLBACK, REMOVED,
+
+        // states added my mongo-replication-admin
+        UNAVAILABLE, NAME_MISMATCH, MISCONFIGURED
+    }
 
     private Map<String, ? > m_status;
 
@@ -44,8 +50,8 @@ public class MongoService {
         return m_status;
     }
 
-    public String getState() {
-        return getStatusValue("stateStr");
+    public State getState() {
+        return State.valueOf((String) m_status.get("state"));
     }
 
     public String getErrMsg() {
@@ -62,24 +68,28 @@ public class MongoService {
     }
 
     public String getStatusValue(String key) {
-        Map<String, ?> status = getStatus();
+        Map<String, ? > status = getStatusMember();
         return status == null ? null : (String) status.get(key);
     }
 
-    Map<String, ?> getStatus() {
-        String s = getServerId();
-        Map<String, ?> o = (Map<String, ?>) m_status.get("status");
-        if (o != null) {
-            List<Map<String, ? >> l = (List<Map<String, ?>>) o.get("members");
-            if (l != null) {
-                for (Map<String, ? > m : l) {
-                    if (m.get("self") != null) {
-                        return m;
-                    }
-
+    Map<String, ? > getStatusMember() {
+        List<Map<String, ? >> l = getStatusMembers();
+        if (l != null) {
+            for (Map<String, ? > m : l) {
+                if (m.get("self") != null) {
+                    return m;
                 }
             }
+        }
+        return null;
+    }
 
+    List<Map<String, ? >> getStatusMembers() {
+        String s = getServerId();
+        Map<String, ? > o = (Map<String, ? >) m_status.get("status");
+        if (o != null) {
+            List<Map<String, ? >> l = (List<Map<String, ? >>) o.get("members");
+            return l;
         }
         return null;
     }

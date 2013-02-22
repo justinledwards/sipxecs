@@ -69,7 +69,7 @@
     <property name="locationsManager" ref="locationsManager" />  
   </bean>
   
-  <bean id="mongoActionModel" class="org.sipfoundry.sipxconfig.mongo.MongoActionModel" scope="prototype" init-method="init">
+  <bean id="mongoActionModel" class="org.sipfoundry.sipxconfig.mongo.MongoActionModel" scope="prototype">
     <property name="featureManager" ref="featureManager" />  
     <property name="locationsManager" ref="locationsManager" />
   </bean>

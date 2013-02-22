@@ -12,8 +12,11 @@
 # details.
 
 # Mongo admin operations
-bundle mongodb_actions {
+bundle agent mongodb_actions {
   methods:
+    any::
+       "any" usebundle => "sipx_module";
+
     RESTART_DATABASE|RESTART_ARBITER::
       # NOTE: calling 'mongodb' method is more then required, but makes 
       # a convenient entry point
@@ -21,12 +24,12 @@ bundle mongodb_actions {
 
   commands:
     CLEAR_LOCAL::
-      "$(SIPX_BINDIR)/mongo-admin"
+      "$(sipx.SIPX_BINDIR)/mongo-admin"
         comment => "Reset local database",
         args => "--clearLocal";
 
     FORCE_PRIMARY::
-      "$(SIPX_BINDIR)/mongo-replication-admin"
+      "$(sipx.SIPX_BINDIR)/mongo-replication-admin"
         comment => "Force this server to be only server in cluster",
         args => "--host $(sipx.host).$(sipx.net_domain):27017 --forcePrimary";
 }

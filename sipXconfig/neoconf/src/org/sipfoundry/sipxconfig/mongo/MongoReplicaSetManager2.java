@@ -39,7 +39,8 @@ public class MongoReplicaSetManager2 implements BeanFactoryAware {
     private String m_replicationAdminScript;
     private BeanFactory m_beanFactory;
     private Thread m_lastJob;
-    private Map<MongoAction, MongoOperation> m_operations = new HashMap<MongoAction, MongoOperation>();
+    private UserException m_lastError;
+    private Map<MongoAction, MongoOperation> m_operations;
 
     public FeatureManager getFeatureManager() {
         return m_featureManager;
@@ -56,6 +57,7 @@ public class MongoReplicaSetManager2 implements BeanFactoryAware {
     public MongoActionModel getActionModel(Map<String, MongoService> services) {
         MongoActionModel model = (MongoActionModel) m_beanFactory.getBean("mongoActionModel");
         model.setMongos(services);
+        model.init();
         return model;
     }
 
@@ -90,78 +92,104 @@ public class MongoReplicaSetManager2 implements BeanFactoryAware {
         return nodes;
     }
 
-    public void buildOperations() {
+    void enableDatabase(MongoAction action, String serverId) {
+        Location l = m_locationsManager.getLocationByFqdn(serverId);
+        LocationFeature f;
+        boolean enable;
+        switch (action) {
+        case REMOVE_ARBITER:
+            f = MongoManager.ACTIVE_ARBITER;
+            enable = false;
+            break;
+        case ADD_ARBITER:
+            f = MongoManager.ARBITER_FEATURE;
+            enable = true;
+            break;
+        case ADD_DATABASE:
+            f = MongoManager.FEATURE_ID;
+            enable = true;
+            break;
+        case REMOVE_DATABASE:
+            f = MongoManager.ACTIVE_DATABASE;
+            enable = false;
+            break;
+        default:
+            throw new IllegalStateException();
+        }
+        m_featureManager.enableLocationFeature(f, l, enable);
+    }
+
+    void activeDatabase(AbstractMongoOperation operation, MongoAction action, String serverId, String fqdn) {
+        Location l = m_locationsManager.getLocationByFqdn(serverId);
+        String arbiterAddress = fqdn + ':' + MongoSettings.ARBITER_PORT;
+        String dbAddress = fqdn + ':' + MongoSettings.SERVER_PORT;
+        List<String> cmd;
+        LocationFeature f;
+        boolean enable;
+        String remove = "--remove";
+        switch (action) {
+        case ADD_DATABASE:
+            // wait until STARTED/STOPPED
+            waitUntilDatabaseAvailable(dbAddress);
+        case FINISH_INCOMPLETE_ADD_DATABASE:
+            f = MongoManager.ACTIVE_DATABASE;
+            enable = true;
+            cmd = operation.getReplicationCommand(this, "--add", dbAddress);
+            break;
+
+        case ADD_ARBITER:
+            // wait until STARTED/STOPPED
+            waitUntilDatabaseAvailable(arbiterAddress);
+        case FINISH_INCOMPLETE_ADD_ARBITER:
+            f = MongoManager.ACTIVE_ARBITER;
+            enable = true;
+            cmd = operation.getReplicationCommand(this, "--addArbiter", arbiterAddress);
+            break;
+
+        case REMOVE_DATABASE:
+            f = MongoManager.FEATURE_ID;
+            enable = false;
+            cmd = operation.getReplicationCommand(this, remove, dbAddress);
+            break;
+
+        case REMOVE_ARBITER:
+            f = MongoManager.ARBITER_FEATURE;
+            enable = false;
+            cmd = operation.getReplicationCommand(this, remove, arbiterAddress);
+            break;
+
+        default:
+            throw new IllegalStateException();
+        }
+        operation.run(cmd, null);
+        // roll out config
+        m_featureManager.enableLocationFeature(f, l, enable);
+    }
+
+    void runRequest(MongoAction action, String fqdn) {
+        Location l = m_locationsManager.getLocationByFqdn(fqdn);
+        RunRequest rr = new RunRequest("MONGO " + action, Collections.singleton(l));
+        rr.setBundles("mongodb_actions");
+        rr.setDefines(action.toString());
+        getConfigManager().run(rr);
+    }
+
+    public Map<MongoAction, MongoOperation> getOperations() {
+        if (m_operations != null) {
+            return m_operations;
+        }
         Map<MongoAction, MongoOperation> operations = new HashMap<MongoAction, MongoOperation>();
         MongoOperation addOrRemove = new AbstractMongoOperation() {
             @Override
             public boolean runNow(MongoOperationRequest request) {
-                Location l = m_locationsManager.getLocationByFqdn(request.getServerId());
-                LocationFeature f;
-                boolean enable;
-                switch (request.getAction()) {
-                case REMOVE_ARBITER:
-                    f = MongoManager.ACTIVE_ARBITER;
-                    enable = false;
-                    break;
-                case ADD_ARBITER:
-                    f = MongoManager.ARBITER_FEATURE;
-                    enable = true;
-                    break;
-                case ADD_DATABASE:
-                    f = MongoManager.FEATURE_ID;
-                    enable = true;
-                    break;
-                case REMOVE_DATABASE:
-                    f = MongoManager.ACTIVE_DATABASE;
-                    enable = false;
-                    break;
-                default:
-                    throw new RuntimeException("Unrecognized action " + request.getAction());
-                }
-                request.getManager().getFeatureManager().enableLocationFeature(f, l, enable);
+                enableDatabase(request.getAction(), request.getServerId());
                 return true;
             }
 
             @Override
             public void runLater(MongoOperationRequest request) {
-                // wait until STARTED/STOPPED
-                // add/remove to replset
-                // roll out config
-                Location l = m_locationsManager.getLocationByFqdn(request.getServerId());
                 String fqdn = request.getServerId();
-                String arbiterAddress = fqdn + ':' + MongoSettings.ARBITER_PORT;
-                String dbAddress = fqdn + ':' + MongoSettings.SERVER_PORT;
-                List<String> cmd;
-                LocationFeature f;
-                boolean enable;
-                switch (request.getAction()) {
-                case ADD_DATABASE:
-                    waitUntilDatabaseAvailable(dbAddress);
-                    f = MongoManager.ACTIVE_DATABASE;
-                    enable = true;
-                    cmd = getReplicationCommand(request.getManager(), "--add", dbAddress);
-                    break;
-                case ADD_ARBITER:
-                    waitUntilDatabaseAvailable(arbiterAddress);
-                    f = MongoManager.ACTIVE_ARBITER;
-                    enable = true;
-                    cmd = getReplicationCommand(request.getManager(), "--addArbiter", arbiterAddress);
-                    break;
-                case REMOVE_DATABASE:
-                    f = MongoManager.FEATURE_ID;
-                    enable = false;
-                    cmd = getReplicationCommand(request.getManager(), "--remove", dbAddress);
-                    break;
-                case REMOVE_ARBITER:
-                    f = MongoManager.ARBITER_FEATURE;
-                    enable = false;
-                    cmd = getReplicationCommand(request.getManager(), "--removeArbiter", arbiterAddress);
-                    break;
-                default:
-                    throw new RuntimeException("Unrecognized action 2 " + request.getAction());
-                }
-                run(cmd, null);
-                m_featureManager.enableLocationFeature(f, l, enable);
+                activeDatabase(this, request.getAction(), request.getServerId(), fqdn);
             }
         };
 
@@ -170,15 +198,11 @@ public class MongoReplicaSetManager2 implements BeanFactoryAware {
         operations.put(MongoAction.REMOVE_ARBITER, addOrRemove);
         operations.put(MongoAction.REMOVE_DATABASE, addOrRemove);
 
-        MongoOperation simpleCommand = new AbstractMongoOperation() {
+        MongoOperation runRequest = new AbstractMongoOperation() {
             @Override
             public boolean runNow(MongoOperationRequest request) {
                 String fqdn = MongoService.label(request.getServerId());
-                Location l = m_locationsManager.getLocationByFqdn(fqdn);
-                RunRequest rr = new RunRequest("MONGO " + request.getAction(), Collections.singleton(l));
-                rr.setBundles("mongodb_actions");
-                rr.setDefines(request.getAction().toString());
-                getConfigManager().run(rr);
+                runRequest(request.getAction(), fqdn);
                 return false;
             }
 
@@ -187,10 +211,53 @@ public class MongoReplicaSetManager2 implements BeanFactoryAware {
             }
         };
 
-        operations.put(MongoAction.RESTART_DATABASE, simpleCommand);
-        operations.put(MongoAction.RESTART_ARBITER, simpleCommand);
-        operations.put(MongoAction.FORCE_PRIMARY, simpleCommand);
-        operations.put(MongoAction.CLEAR_LOCAL, simpleCommand);
+        operations.put(MongoAction.RESTART_DATABASE, runRequest);
+        operations.put(MongoAction.RESTART_ARBITER, runRequest);
+        operations.put(MongoAction.FORCE_PRIMARY, runRequest);
+        operations.put(MongoAction.CLEAR_LOCAL, runRequest);
+
+        MongoOperation simpleCommand = new AbstractMongoOperation() {
+            @Override
+            public boolean runNow(MongoOperationRequest request) {
+                List<String> cmd = null;
+                switch (request.getAction()) {
+                case RESET_BAD_HOSTNAMES:
+                    cmd = getReplicationCommand(MongoReplicaSetManager2.this, "--name");
+                    break;
+                default:
+                    throw new IllegalStateException();
+                }
+                run(cmd, null);
+                return false;
+            }
+
+            @Override
+            public void runLater(MongoOperationRequest request) {
+            }
+        };
+
+        // reset bad hostname can run on any server, but might as well
+        // run command on server that has bad hostname.
+        operations.put(MongoAction.RESET_BAD_HOSTNAMES, simpleCommand);
+
+        MongoOperation finshAdd = new AbstractMongoOperation() {
+            @Override
+            public boolean runNow(MongoOperationRequest request) {
+                String fqdn = MongoService.label(request.getServerId());
+                activeDatabase(this, request.getAction(), request.getServerId(), fqdn);
+                return false;
+            }
+
+            @Override
+            public void runLater(MongoOperationRequest request) {
+            }
+        };
+
+        operations.put(MongoAction.FINISH_INCOMPLETE_ADD_ARBITER, finshAdd);
+        operations.put(MongoAction.FINISH_INCOMPLETE_ADD_DATABASE, finshAdd);
+
+        m_operations = operations;
+        return operations;
     }
 
     public void waitUntilDatabaseAvailable(String address) {
@@ -198,6 +265,7 @@ public class MongoReplicaSetManager2 implements BeanFactoryAware {
     }
 
     public synchronized void cancelLastJob() {
+        m_lastError = null;
         if (m_lastJob != null) {
             if (m_lastJob.isAlive()) {
                 m_lastJob.interrupt();
@@ -207,24 +275,33 @@ public class MongoReplicaSetManager2 implements BeanFactoryAware {
     }
 
     public synchronized void takeAction(MongoAction action, final String serverId, final String... params) {
+        m_lastError = null;
         if (m_lastJob != null) {
             if (m_lastJob.isAlive()) {
                 throw new UserException("Operation still in progress.");
             }
         }
 
-        // clone in case there is state, but not strictly nec. from current implementation
-        final MongoOperation job = m_operations.get(action).clone();
+        // reusing operations relies on operations having no state
+        final MongoOperation job = getOperations().get(action);
 
         final MongoOperationRequest request = new MongoOperationRequest(this, action, serverId, params);
         if (job.runNow(request)) {
-            m_lastJob = new Thread() {
+            m_lastJob = new Thread(action.toString()) {
                 public void run() {
-                    job.runLater(request);
+                    try {
+                        job.runLater(request);
+                    } catch (UserException e) {
+                        m_lastError = e;
+                    }
                 }
             };
             m_lastJob.start();
         }
+    }
+
+    public UserException getLastError() {
+        return m_lastError;
     }
 
     public String getReplicationAdminScript() {

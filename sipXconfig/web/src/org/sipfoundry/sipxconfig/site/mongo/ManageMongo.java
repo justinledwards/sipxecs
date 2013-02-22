@@ -85,17 +85,23 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
     @Asset("/images/server.png")
     public abstract IAsset getServerIcon();
 
-    @Asset("/images/whistle.png")
-    public abstract IAsset getArbiterIcon();
+    @Asset("/images/unknown.png")
+    public abstract IAsset getUnknownIcon();
 
-    @Asset("/images/cross.png")
+    @Asset("/images/error.png")
     public abstract IAsset getErrorIcon();
 
     @Asset("/images/running.png")
     public abstract IAsset getRunningIcon();
 
-    @Asset("/images/error.png")
+    @Asset("/images/server.png")
     public abstract IAsset getUnconfiguredIcon();
+
+    @Asset("/images/cross.png")
+    public abstract IAsset getStoppedIcon();
+
+    @Asset("/images/loading.png")
+    public abstract IAsset getLoadingIcon();
 
     @InitialValue(value = "literal:")
     public abstract String getServerName();
@@ -141,6 +147,24 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
         }
     }
 
+    public IAsset getStatusAsset() {
+        switch (getMongo().getState()) {
+        case PRIMARY:
+        case ARBITER:
+            return getRunningIcon();
+        case UNKNOWN:
+            return getUnknownIcon();
+        case STARTUP1:
+            return getUnconfiguredIcon();
+        case STARTUP2:
+            return getLoadingIcon();
+        case UNAVAILABLE:
+            return getStoppedIcon();
+        default:
+            return getErrorIcon();
+        }
+    }
+
     @InitialValue(value = "literal:")
     public abstract String getSpecificServerAction();
 
@@ -172,6 +196,14 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
             MongoActionModel actionModel = getMongoReplicaSetManager2().getActionModel(mongos);
             setActionModel(actionModel);
         }
+        UserException lastErr = getMongoReplicaSetManager2().getLastError();
+        if (lastErr != null) {
+            getValidator().record(lastErr, getMessages());
+        }
+    }
+
+    public void refresh() {
+        // nop
     }
 
     public void takeAction() {
@@ -193,7 +225,6 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
                     "congrats, you pressed specific action " + specificServerAction + " for server "
                             + specificServer);
         }
-        // else refresh
     }
 
     public void addInReplicaSet(String name) {

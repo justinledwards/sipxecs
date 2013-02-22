@@ -53,7 +53,7 @@ public class MongoReplicaSetManager2Test {
         Map<String, MongoService> nodes = m_manager.getMongoServices();
         assertNotNull(nodes);
         assertEquals(2 ,nodes.size());
-        Map<String, ? > status = nodes.get("swift.hubler.us:27018").getStatus();
+        Map<String, ? > status = nodes.get("swift.hubler.us:27018").getStatusMember();
         assertNotNull(status);   
         MongoService[] actual = nodes.values().toArray(new MongoService[0]);
         assertEquals(actual[0].getStatusValue("stateStr"), "PRIMARY");

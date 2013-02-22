@@ -65,7 +65,7 @@ class MongoAdmin:
             self.state = MongoAdmin.HEALTHY
 
     def cmd_status(self, ignored):
-        self.needsState(MongoAdmin.INIT)
+        self.loadMeta()
         print '['
         for i in range(len(self.meta)):
             if i != 0:
@@ -202,12 +202,13 @@ class MongoAdmin:
             l = c['local']
             cfg = self.eval(l, 'rs.config()')
             status = self.eval(l, 'rs.status()')
-            m = {'server' : host_port, 'state' : 'ok', 'status' : status, 'config' : cfg}
+            state = self.getState(host_port, cfg, status)
+            m = {'server' : host_port, 'state' : state, 'status' : status, 'config' : cfg}
             c.close
             c = None
 
         except PyMongoError as e:
-            m = {'server' : host_port, 'state' : 'unavailable'}
+            m = {'server' : host_port, 'state' : 'UNAVAILABLE', 'role' : 'UKNOWN'}
 
         finally:
             if c != None:
@@ -215,7 +216,35 @@ class MongoAdmin:
                 c.close()
 
         return m
-        
+    
+    def getState(self, host_port, cfg, status):
+        state = 'UNKNOWN'
+        states = ['STARTUP1', 'PRIMARY', 'SECONDARY', 'RECOVERING', 'FATAL_ERROR',
+          'STARTUP2', 'UNKNOWN', 'ARBITER', 'DOWN', 'ROLLBACK', 'REMOVED']
+
+        if status:
+            if 'myState' in status:              
+              state = states[int(status['myState'])]
+
+            # additional checks for misconfigured ssytems
+            if 'set' in status and status['set'] != self.replSet:
+                state = 'MISCONFIGURED'
+                logging.debug('bad replset ' + status['set'])
+            elif 'startupStatus' in status:
+                startStat = status['startupStatus']
+                logging.debug('uninitialized, start status %d' % startStat)
+                # only saw 3 on db and 1 on arbiter before
+                if startStat == 3 :
+                    state = 'UNINITIALIZED'
+                else:
+                    state = 'MISCONFIGURED'
+            elif 'members' in status:
+                for m in status['members']:
+                    if 'self' in m:
+                        if m['name'] != host_port:
+                            logging.debug('member hostname does not match ' + m['name'])
+                            state = 'NAME_MISMATCH'
+        return state
 
     def loadMeta(self):
         self.meta = []

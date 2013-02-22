@@ -85,16 +85,24 @@ public class MongoActionModel {
     Collection<MongoAction> buildDatabaseServerActions(String dbId, Location l, Set<String> dbIds) {
         List<MongoAction> actions = buildServerActions(dbId, l, dbIds);
 
-        if (dbIds.contains(dbId) && !l.isPrimary()) {
+        if (dbIds.contains(dbId)) {
             actions.add(MongoAction.RESTART_DATABASE);
-            actions.add(MongoAction.REMOVE_DATABASE);
+            if (!l.isPrimary()) {
+                actions.add(MongoAction.REMOVE_DATABASE);
+            }
         }
 
         if (m_mongos.containsKey(dbId)) {
             MongoService service = m_mongos.get(dbId);
-            String state = service.getState();
-            if (state.equals("PRIMARY") && hasMoreThanTwoActiveServers()) {
-                actions.add(MongoAction.STEP_DOWN);
+            MongoService.State state = service.getState();
+            actions.add(MongoAction.FORCE_PRIMARY);
+            if (state == MongoService.State.PRIMARY) {
+                if (hasMoreThanTwoActiveServers()) {
+                    actions.add(MongoAction.STEP_DOWN);
+                }
+            }
+            if (state == MongoService.State.STARTUP1) {
+                actions.add(MongoAction.FINISH_INCOMPLETE_ADD_ARBITER);
             }
         }
 
@@ -108,6 +116,13 @@ public class MongoActionModel {
             actions.add(MongoAction.RESTART_ARBITER);
             actions.add(MongoAction.REMOVE_ARBITER);
         }
+        if (m_mongos.containsKey(dbId)) {
+            MongoService service = m_mongos.get(dbId);
+            MongoService.State state = service.getState();
+            if (state == MongoService.State.STARTUP1) {
+                actions.add(MongoAction.FINISH_INCOMPLETE_ADD_ARBITER);
+            }
+        }
 
         return actions;
     }
@@ -116,10 +131,15 @@ public class MongoActionModel {
         List<MongoAction> actions = new ArrayList<MongoAction>();
 
         if (dbIds.contains(dbId)) {
-            actions.add(MongoAction.FORCE_PRIMARY);
-
-            // hmmm, probably should only be option if service is in bad state
             actions.add(MongoAction.CLEAR_LOCAL);
+        }
+
+        if (m_mongos.containsKey(dbId)) {
+            MongoService service = m_mongos.get(dbId);
+            MongoService.State state = service.getState();
+            if (state == MongoService.State.NAME_MISMATCH) {
+                actions.add(MongoAction.RESET_BAD_HOSTNAMES);
+            }
         }
 
         return actions;
@@ -129,12 +149,15 @@ public class MongoActionModel {
         boolean hasPrimary = false;
         boolean hasSecondary = false;
         for (MongoService mongo : m_mongos.values()) {
-            String state = mongo.getState();
-            if (MongoService.SECONDARY.equals(state)) {
-                hasSecondary = true;
-            }
-            if (MongoService.PRIMARY.equals(state)) {
+            switch (mongo.getState()) {
+            case PRIMARY:
                 hasPrimary = true;
+                break;
+            case SECONDARY:
+                hasSecondary = true;
+                break;
+            default:
+                break;
             }
             if (hasSecondary && hasPrimary) {
                 return true;

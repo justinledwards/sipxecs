@@ -26,22 +26,14 @@
       row="ognl:mongo"
       converter="ognl:converter">
       <span jwcid="nameColumnValue@Block">
-        <span jwcid="@If" condition="ognl:mongo.health == 'UP'">
-          <img jwcid="@Image" image="asset:runningIcon" align="absmiddle" />
-        </span>
-        <span jwcid="@If" condition="ognl:mongo.health == 'DOWN'">
-          <img jwcid="@Image" image="asset:errorIcon" align="absmiddle" />
-        </span>
-        <span jwcid="@If" condition="ognl:mongo.health == 'UNCONFIGURED'">
-          <img jwcid="@Image" image="asset:unconfiguredIcon" align="absmiddle" />
-        </span>
+        <img jwcid="@Image" image="ognl:statusAsset" align="absmiddle"/>
         <span jwcid="@Insert" value="ognl:mongo.serverId" />
         <span jwcid="@If" condition="ognl:mongo.errMsg != null"> 
           <span jwcid="@Insert" value="ognl:mongo.errMsg"/>
         </span>
       </span>
       <span jwcid="stateColumnValue@Block">
-          <span jwcid="@Insert" value="ognl:mongo.getStatusValue('stateStr')"/>
+          <span jwcid="@Insert" value="ognl:messages.getMessage(mongo.state)"/>
       </span>
       <span jwcid="actionColumnValue@Block">
 	    <select jwcid="specificServerAction@Select" value="ognl:specificServerAction" id="specificServerAction"
@@ -53,5 +45,13 @@
         </select>            
       </span>
     </table>
+	<ul class="component-submit">
+	  <li>
+	    <input id="mongo:refresh"
+	      jwcid="@Submit"
+	      value="message:button.refresh"
+	      listener="listener:refresh"/>
+	  </li>
+    </ul>    
   </form>
 </div>

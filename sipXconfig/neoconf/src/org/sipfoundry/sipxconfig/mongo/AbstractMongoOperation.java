@@ -20,6 +20,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.sipfoundry.sipxconfig.common.UserException;
 import org.sipfoundry.sipxconfig.commserver.Location;
 import org.sipfoundry.sipxconfig.feature.FeatureManager;
@@ -27,6 +30,7 @@ import org.sipfoundry.sipxconfig.feature.FeatureManager;
 import com.mongodb.util.JSON;
 
 public abstract class AbstractMongoOperation implements MongoOperation {
+    private static final Log LOG = LogFactory.getLog(AbstractMongoOperation.class);
 
     public static interface CommandReader {
         public void read(AbstractMongoOperation operation, InputStream in) throws Exception;
@@ -66,13 +70,16 @@ public abstract class AbstractMongoOperation implements MongoOperation {
     }
 
     protected void run(List<String> cmd, final CommandReader reader) {
+        final String cmdLine = StringUtils.join(cmd, ' ');
+        LOG.debug(cmdLine);
         ProcessBuilder b = new ProcessBuilder(cmd.toArray(new String[0]));
         final Exception[] errPtr = new Exception[1];
         try {
             final Process c = b.start();
-            Thread t = null;
+            final StringBuilder errStream = new StringBuilder();
+            Thread in = null;
             if (reader != null) {
-                t = new Thread() {
+                in = new Thread(cmd.get(0) + " out") {
                     @Override
                     public void run() {
                         try {
@@ -82,19 +89,33 @@ public abstract class AbstractMongoOperation implements MongoOperation {
                         }
                     }
                 };
-                t.start();
+                in.start();
             }
-
+            Thread err = new Thread(cmd.get(0) + " err") {
+                @Override
+                public void run() {
+                    try {
+                        String msg = IOUtils.toString(c.getErrorStream());
+                        errStream.append(msg);
+                        LOG.error(cmdLine);
+                        LOG.error(msg);
+                    } catch (Exception e) {
+                        errPtr[0] = e;
+                    }
+                }
+            };
+            err.start();
             c.waitFor();
-            if (t != null) {
-                t.join();
+            if (in != null) {
+                in.join();
             }
+            err.join();
             int rc = c.exitValue();
             if (errPtr[0] != null) {
                 throw new UserException(errPtr[0]);
             }
             if (rc != 0) {
-                throw new UserException("exit code " + rc);
+                throw new UserException("Failure to complete command, check log file. Exit code " + rc);
             }
         } catch (IOException e1) {
             throw new UserException("IO error running mongo admin operation", e1);
