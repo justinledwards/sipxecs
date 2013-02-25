@@ -23,9 +23,14 @@ import static org.junit.Assert.assertNotNull;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.ConnectException;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.UnknownHostException;
 import java.util.Collections;
 import java.util.Map;
 
+import org.apache.commons.lang.StringUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.sipfoundry.sipxconfig.feature.FeatureManager;
@@ -39,6 +44,30 @@ public class MongoReplicaSetManager2Test {
         m_manager = new MongoReplicaSetManager2();        
         File script = TestHelper.getResourceAsFile(getClass(), "mongo-replication-admin");
         m_manager.setReplicationAdminScript(script.getAbsolutePath());
+    }
+    
+    @Test
+    public void testConnect() throws NumberFormatException, UnknownHostException, IOException {
+        String hostPort = "localhost:27019";
+        String[] split = StringUtils.split(hostPort, ':');
+        InetSocketAddress address = new InetSocketAddress(split[0], Integer.valueOf(split[1]));
+        boolean connected = false;
+        for (int i = 0; i < 10; i++) {
+            try {
+                Socket test = new Socket();
+                test.connect(address, 10000);
+                connected = true;
+                break;
+            } catch (ConnectException e) {
+                System.out.print("here");
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e1) {
+                    break;
+                }
+            }
+        }
+        System.out.print(connected ? "connected" : "no connection");
     }
 
     @Test

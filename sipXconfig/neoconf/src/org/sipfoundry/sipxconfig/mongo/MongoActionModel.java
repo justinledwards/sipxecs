@@ -102,7 +102,10 @@ public class MongoActionModel {
                 }
             }
             if (state == MongoService.State.STARTUP1) {
-                actions.add(MongoAction.FINISH_INCOMPLETE_ADD_ARBITER);
+                actions.add(MongoAction.FINISH_INCOMPLETE_ADD_DATABASE);
+            }
+            if (state == MongoService.State.MISCONFIGURED || state == MongoService.State.REMOVED) {
+                actions.add(MongoAction.CLEAR_LOCAL);
             }
         }
 
@@ -122,6 +125,9 @@ public class MongoActionModel {
             if (state == MongoService.State.STARTUP1) {
                 actions.add(MongoAction.FINISH_INCOMPLETE_ADD_ARBITER);
             }
+            if (state == MongoService.State.MISCONFIGURED || state == MongoService.State.REMOVED) {
+                actions.add(MongoAction.CLEAR_ARBITER);
+            }
         }
 
         return actions;
@@ -129,11 +135,6 @@ public class MongoActionModel {
 
     List<MongoAction> buildServerActions(String dbId, Location l, Set<String> dbIds) {
         List<MongoAction> actions = new ArrayList<MongoAction>();
-
-        if (dbIds.contains(dbId)) {
-            actions.add(MongoAction.CLEAR_LOCAL);
-        }
-
         if (m_mongos.containsKey(dbId)) {
             MongoService service = m_mongos.get(dbId);
             MongoService.State state = service.getState();

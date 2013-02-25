@@ -24,9 +24,16 @@ bundle agent mongodb_actions {
 
   commands:
     CLEAR_LOCAL::
+      # this does restart server
       "$(sipx.SIPX_BINDIR)/mongo-admin"
         comment => "Reset local database",
         args => "--clearLocal";
+
+    CLEAR_ARBITER::
+      # this does restart server
+      "$(sipx.SIPX_BINDIR)/mongo-admin"
+        comment => "Reset arbiter local database",
+        args => "--clearArbiter";
 
     FORCE_PRIMARY::
       "$(sipx.SIPX_BINDIR)/mongo-replication-admin"

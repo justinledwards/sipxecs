@@ -14,13 +14,18 @@
  */
 package org.sipfoundry.sipxconfig.mongo;
 
+import java.io.IOException;
 import java.io.InputStream;
+import java.net.ConnectException;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import org.apache.commons.lang.StringUtils;
 import org.sipfoundry.sipxconfig.cfgmgt.ConfigManager;
 import org.sipfoundry.sipxconfig.cfgmgt.RunRequest;
 import org.sipfoundry.sipxconfig.common.UserException;
@@ -129,8 +134,11 @@ public class MongoReplicaSetManager2 implements BeanFactoryAware {
         String remove = "--remove";
         switch (action) {
         case ADD_DATABASE:
-            // wait until STARTED/STOPPED
-            waitUntilDatabaseAvailable(dbAddress);
+            if (!waitUntilConnectionAvailable(dbAddress)) {
+                throw new UserException("Database not available " + dbAddress);
+            }
+            // fallthru
+
         case FINISH_INCOMPLETE_ADD_DATABASE:
             f = MongoManager.ACTIVE_DATABASE;
             enable = true;
@@ -138,8 +146,11 @@ public class MongoReplicaSetManager2 implements BeanFactoryAware {
             break;
 
         case ADD_ARBITER:
-            // wait until STARTED/STOPPED
-            waitUntilDatabaseAvailable(arbiterAddress);
+            if (!waitUntilConnectionAvailable(arbiterAddress)) {
+                throw new UserException("Arbiter not available " + dbAddress);
+            }
+            // fallthru
+
         case FINISH_INCOMPLETE_ADD_ARBITER:
             f = MongoManager.ACTIVE_ARBITER;
             enable = true;
@@ -169,6 +180,7 @@ public class MongoReplicaSetManager2 implements BeanFactoryAware {
     void runRequest(MongoAction action, String fqdn) {
         Location l = m_locationsManager.getLocationByFqdn(fqdn);
         RunRequest rr = new RunRequest("MONGO " + action, Collections.singleton(l));
+        // commands are implemented in file sipXmongo/etc/mongodb_actions.cf
         rr.setBundles("mongodb_actions");
         rr.setDefines(action.toString());
         getConfigManager().run(rr);
@@ -215,6 +227,7 @@ public class MongoReplicaSetManager2 implements BeanFactoryAware {
         operations.put(MongoAction.RESTART_ARBITER, runRequest);
         operations.put(MongoAction.FORCE_PRIMARY, runRequest);
         operations.put(MongoAction.CLEAR_LOCAL, runRequest);
+        operations.put(MongoAction.CLEAR_ARBITER, runRequest);
 
         MongoOperation simpleCommand = new AbstractMongoOperation() {
             @Override
@@ -260,8 +273,30 @@ public class MongoReplicaSetManager2 implements BeanFactoryAware {
         return operations;
     }
 
-    public void waitUntilDatabaseAvailable(String address) {
-        return;
+    public boolean waitUntilConnectionAvailable(String hostPort) {
+        String[] split = StringUtils.split(hostPort, ':');
+        InetSocketAddress address = new InetSocketAddress(split[0], Integer.valueOf(split[1]));
+        for (int i = 0; i < 10; i++) {
+            try {
+                Socket test = new Socket();
+                test.connect(address, 10000);
+                return true;
+            } catch (ConnectException e) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e1) {
+                    return false;
+                }
+            } catch (IOException e) {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    public boolean isOperationIsProgress() {
+        return m_lastJob != null && m_lastJob.isAlive();
     }
 
     public synchronized void cancelLastJob() {

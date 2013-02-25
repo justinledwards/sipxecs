@@ -26,6 +26,7 @@ class MongoAdminException(Exception):
 
 REDHAT_CONFIG_FILE = "/etc/mongodb.conf"
 TENGEN_CONFIG_FILE = "/etc/mongod.conf"
+ARBITER_CONFIG_FILE = "/etc/mongod-arbiter.conf"
 
 class MongoAdmin:
 
@@ -45,6 +46,8 @@ class MongoAdmin:
              % self.cfg)
         logging.debug("db path " + self.dbpath)
         self.lockfile = self.dbpath + "/mongod.lock"
+        self.upCommand = '/sbin/service mongod start'
+        self.downCommand = '/sbin/service mongod stop'
 
     def cmd_obliterate(self, ignored):
         # ignore err, maybe it wasn't running
@@ -66,12 +69,20 @@ class MongoAdmin:
         if os.system("/bin/su -- %s /usr/bin/mongod --repair" % self.user) != 0:
             raise MongoAdminException(ERR_FAILED_TO_REPAIR, "Could not repair database")
 
+    def cmd_clearArbiter(self, ignored):
+        ok, self.dbpath = commands.getstatusoutput('awk -F= \'/^dbpath *= */{print $2}\' "%s"' \
+             % ARBITER_CONFIG_FILE)
+        self.upCommand = '@SIPX_SERVICEDIR@/mongod-arbiter start'
+        self.downCommand = '@SIPX_SERVICEDIR@/mongod-arbiter stop'
+        self.lockfile = self.dbpath + "/mongod.lock"
+        self.cmd_clearLocal(ignored)
+
     def down(self):
-        if os.system('/sbin/service mongod stop') != 0:
+        if os.system(self.downCommand) != 0:
           logging.debug('Could not stop mongod server, might be already down')
 
     def up(self):
-        if os.system('/sbin/service mongod start') != 0:
+        if os.system(self.upCommand) != 0:
             raise MongoAdminException(ERR_FAILED_TO_START, 'Could not start '
               'mongo after repairing')
         
@@ -103,11 +114,13 @@ if __name__ == '__main__':
     parser.add_argument('--obliterate', action="store_true",
                 help='Wipe all database and replication information from this server')
     parser.add_argument('--clearLocal',  action="store_true",
-                help='Clear only the local database which store replication configuration')
+                help='Clear only the local database which stores replication configuration')
+    parser.add_argument('--clearArbiter',  action="store_true",
+                help='Clear arbiter local database which stores replication configuration')
     parser.add_argument('--autoRepair',  action="store_true",
-                help='Clear only the local database which store replication configuration')
+                help='Detect if mongodb is in need of repair and repair it if required. Harmless to call if database is ok, ideal for a periodic cron job.')
     parser.add_argument('--repair',  action="store_true",
-                help='Clear only the local database which store replication configuration')
+                help='Repair mongo database whether it needs it or not.')
     parser.add_argument('--verbose', action="store_true", default=False,
                 help='verbose output')
     args = vars(parser.parse_args())

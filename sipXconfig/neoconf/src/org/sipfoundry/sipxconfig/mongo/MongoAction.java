@@ -14,6 +14,7 @@
  */
 package org.sipfoundry.sipxconfig.mongo;
 
+// if you update this, you may need to also update string resource labels in ManageMongo.properties
 public enum MongoAction {
     RESTART_DATABASE,
     RESTART_ARBITER,
@@ -26,6 +27,7 @@ public enum MongoAction {
     FINISH_INCOMPLETE_ADD_DATABASE,
     INITIALIZE,
     CLEAR_LOCAL,
+    CLEAR_ARBITER,
     FORCE_PRIMARY,
     RESET_BAD_HOSTNAMES
 }
