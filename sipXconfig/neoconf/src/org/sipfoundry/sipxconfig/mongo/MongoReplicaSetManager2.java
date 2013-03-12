@@ -26,6 +26,8 @@ import java.util.Map;
 import java.util.TreeMap;
 
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.sipfoundry.sipxconfig.cfgmgt.ConfigManager;
 import org.sipfoundry.sipxconfig.cfgmgt.RunRequest;
 import org.sipfoundry.sipxconfig.common.UserException;
@@ -38,6 +40,7 @@ import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.BeanFactoryAware;
 
 public class MongoReplicaSetManager2 implements BeanFactoryAware {
+    private static final Log LOG = LogFactory.getLog(MongoReplicaSetManager2.class);
     private FeatureManager m_featureManager;
     private LocationsManager m_locationsManager;
     private ConfigManager m_configManager;
@@ -285,9 +288,11 @@ public class MongoReplicaSetManager2 implements BeanFactoryAware {
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e1) {
+                    LOG.error("Interrupted testing connection", e1);
                     return false;
                 }
             } catch (IOException e) {
+                LOG.error("IO Error testing connection", e);
                 return false;
             }
         }

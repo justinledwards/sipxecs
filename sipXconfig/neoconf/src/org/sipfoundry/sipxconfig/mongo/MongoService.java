@@ -24,7 +24,7 @@ public class MongoService {
         STARTUP2, UNKNOWN, ARBITER, DOWN, ROLLBACK, REMOVED,
 
         // states added my mongo-replication-admin
-        UNAVAILABLE, NAME_MISMATCH, MISCONFIGURED
+        UNAVAILABLE, NAME_MISMATCH, MISCONFIGURED, UNINITIALIZED
     }
 
     private Map<String, ? > m_status;

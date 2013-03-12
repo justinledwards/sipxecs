@@ -71,7 +71,7 @@ public abstract class AbstractMongoOperation implements MongoOperation {
 
     protected void run(List<String> cmd, final CommandReader reader) {
         final String cmdLine = StringUtils.join(cmd, ' ');
-        LOG.debug(cmdLine);
+        LOG.info(cmdLine);
         ProcessBuilder b = new ProcessBuilder(cmd.toArray(new String[0]));
         final Exception[] errPtr = new Exception[1];
         try {
