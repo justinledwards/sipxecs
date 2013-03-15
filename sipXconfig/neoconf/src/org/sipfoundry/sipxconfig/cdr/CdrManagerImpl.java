@@ -124,7 +124,8 @@ public class CdrManagerImpl extends JdbcDaoSupport implements CdrManager, Featur
 
     public List<Cdr> getCdrs(Date from, Date to, CdrSearch search, User user, int limit, int offset) {
         CdrsStatementCreator psc = new SelectAll(from, to, search, user, m_tz, limit, offset);
-        CdrsResultReader resultReader = new CdrsResultReader(m_tz);
+        CdrsResultReader resultReader = new CdrsResultReader(m_tz, getSettings().getPrivacyStatus(), getSettings()
+                .getPrivacyMinLength(), getSettings().getPrivacyExcludeList());
         getJdbcTemplate().query(psc, resultReader);
         return resultReader.getResults();
     }
@@ -368,6 +369,16 @@ public class CdrManagerImpl extends JdbcDaoSupport implements CdrManager, Featur
         private List<Cdr> m_cdrs = new ArrayList<Cdr>();
 
         private Calendar m_calendar;
+        private boolean m_privacy;
+        private int m_privacyLimit;
+        private String m_privacyExcluded;
+
+        public CdrsResultReader(TimeZone tz, boolean privacy, int limit, String excluded) {
+            m_calendar = Calendar.getInstance(tz);
+            m_privacy = privacy;
+            m_privacyLimit = limit;
+            m_privacyExcluded = excluded;
+        }
 
         public CdrsResultReader(TimeZone tz) {
             m_calendar = Calendar.getInstance(tz);
@@ -378,7 +389,7 @@ public class CdrManagerImpl extends JdbcDaoSupport implements CdrManager, Featur
         }
 
         public void processRow(ResultSet rs) throws SQLException {
-            Cdr cdr = new Cdr();
+            Cdr cdr = new Cdr(m_privacy, m_privacyLimit, m_privacyExcluded);
             cdr.setCalleeAor(rs.getString(CALLEE_AOR));
             cdr.setCallerAor(rs.getString(CALLER_AOR));
             cdr.setCallId(rs.getString(CALL_ID));
@@ -491,6 +502,7 @@ public class CdrManagerImpl extends JdbcDaoSupport implements CdrManager, Featur
             m_dateFormat = dateFormat;
         }
     }
+
     /**
      * Maps Active call retrieved from callresolver active calls REST service
      */
@@ -530,6 +542,7 @@ public class CdrManagerImpl extends JdbcDaoSupport implements CdrManager, Featur
         }
 
     }
+
     @Override
     public Collection<GlobalFeature> getAvailableGlobalFeatures(FeatureManager featureManager) {
         return null;
