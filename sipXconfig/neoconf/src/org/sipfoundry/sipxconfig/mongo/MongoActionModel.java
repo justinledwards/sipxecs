@@ -102,7 +102,7 @@ public class MongoActionModel {
                 }
             }
             if (state == MongoService.State.STARTUP1) {
-                actions.add(MongoAction.FINISH_INCOMPLETE_ADD_DATABASE);
+                actions.add(MongoAction.ADD_DATABASE);
             }
             if (state == MongoService.State.MISCONFIGURED || state == MongoService.State.REMOVED) {
                 actions.add(MongoAction.CLEAR_LOCAL);
@@ -123,7 +123,7 @@ public class MongoActionModel {
             MongoService service = m_mongos.get(dbId);
             MongoService.State state = service.getState();
             if (state == MongoService.State.STARTUP1) {
-                actions.add(MongoAction.FINISH_INCOMPLETE_ADD_ARBITER);
+                actions.add(MongoAction.ADD_ARBITER);
             }
             if (state == MongoService.State.MISCONFIGURED || state == MongoService.State.REMOVED) {
                 actions.add(MongoAction.CLEAR_ARBITER);

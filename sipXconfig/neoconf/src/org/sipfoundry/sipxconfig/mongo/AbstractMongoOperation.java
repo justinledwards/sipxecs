@@ -115,6 +115,9 @@ public abstract class AbstractMongoOperation implements MongoOperation {
                 throw new UserException(errPtr[0]);
             }
             if (rc != 0) {
+                if (errStream.length() > 0) {
+                    throw new UserException(errStream.toString());
+                }
                 throw new UserException("Failure to complete command, check log file. Exit code " + rc);
             }
         } catch (IOException e1) {

@@ -22,7 +22,10 @@ import java.io.IOException;
 import java.io.Writer;
 import java.util.List;
 
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.sipfoundry.sipxconfig.cfgmgt.CfengineModuleConfiguration;
 import org.sipfoundry.sipxconfig.cfgmgt.ConfigManager;
 import org.sipfoundry.sipxconfig.cfgmgt.ConfigProvider;
@@ -33,20 +36,27 @@ import org.sipfoundry.sipxconfig.commserver.LocationsManager;
 import org.sipfoundry.sipxconfig.feature.FeatureManager;
 
 public class MongoConfig implements ConfigProvider {
+    private static final Log LOG = LogFactory.getLog(MongoConfig.class);
     private MongoManager m_mongoManager;
+    private MongoReplicaSetManager2 m_mongoReplicateSetManager;
+    private boolean m_incomplete;
 
     @Override
     public void replicate(ConfigManager manager, ConfigRequest request) throws IOException {
-        if (!request.applies(MongoManager.FEATURE_ID, LocationsManager.FEATURE, MongoManager.ARBITER_FEATURE,
-                MongoManager.ACTIVE_ARBITER, MongoManager.ACTIVE_DATABASE)) {
+        if (!request.applies(MongoManager.FEATURE_ID, LocationsManager.FEATURE, MongoManager.ARBITER_FEATURE)) {
             return;
         }
         FeatureManager fm = manager.getFeatureManager();
         Location[] all = manager.getLocationManager().getLocations();
         MongoSettings settings = m_mongoManager.getSettings();
-        List<Location> dbs = manager.getFeatureManager().getLocationsForEnabledFeature(MongoManager.ACTIVE_DATABASE);
-        String connStr = getConnectionString(dbs, settings.getPort());
-        String connUrl = getConnectionUrl(dbs, settings.getPort());
+        List<Location> dbs = manager.getFeatureManager().getLocationsForEnabledFeature(MongoManager.FEATURE_ID);
+        List<Location> live = m_mongoReplicateSetManager.getActiveMongoDatabase();
+        if (!CollectionUtils.isEqualCollection(dbs, live)) {
+            m_incomplete = true;
+            LOG.error("mongo client config is incomplete");
+        }
+        String connStr = getConnectionString(live, settings.getPort());
+        String connUrl = getConnectionUrl(live, settings.getPort());
         for (Location location : all) {
             // CLIENT
             File dir = manager.getLocationDataDirectory(location);
@@ -67,6 +77,14 @@ public class MongoConfig implements ConfigProvider {
                 IOUtils.closeQuietly(server);
             }
         }
+    }
+
+    public void setMongoReplicateSetManager(MongoReplicaSetManager2 mongoReplicateSetManager) {
+        m_mongoReplicateSetManager = mongoReplicateSetManager;
+    }
+
+    public boolean isIncomplete() {
+        return m_incomplete;
     }
 
     void writeServerConfig(Writer w, boolean mongod, boolean arbiter) throws IOException {

@@ -19,6 +19,7 @@ import java.io.InputStream;
 import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -69,6 +70,19 @@ public class MongoReplicaSetManager2 implements BeanFactoryAware {
         return model;
     }
 
+    public List<Location> getActiveMongoDatabase() {
+        List<Location> dbs = m_featureManager.getLocationsForEnabledFeature(MongoManager.FEATURE_ID);
+        List<Location> live = new ArrayList<Location>();
+        Map<String, MongoService> status = getMongoServices();
+        for (Location l : dbs) {
+            String key = l.getFqdn() + ':' + MongoSettings.SERVER_PORT;
+            if (status.containsKey(key)) {
+                live.add(l);
+            }
+        }
+        return live;
+    }
+
     public Map<String, MongoService> getMongoServices() {
         final Map<String, MongoService> nodes = new TreeMap<String, MongoService>();
         final AbstractMongoOperation.CommandReader reader = new AbstractMongoOperation.CommandReader() {
@@ -106,7 +120,7 @@ public class MongoReplicaSetManager2 implements BeanFactoryAware {
         boolean enable;
         switch (action) {
         case REMOVE_ARBITER:
-            f = MongoManager.ACTIVE_ARBITER;
+            f = MongoManager.ARBITER_FEATURE;
             enable = false;
             break;
         case ADD_ARBITER:
@@ -118,7 +132,11 @@ public class MongoReplicaSetManager2 implements BeanFactoryAware {
             enable = true;
             break;
         case REMOVE_DATABASE:
-            f = MongoManager.ACTIVE_DATABASE;
+            List<Location> dbs = m_featureManager.getLocationsForEnabledFeature(MongoManager.FEATURE_ID);
+            if (dbs.size() <= 1) {
+                throw new UserException("&error.noMongos");
+            }
+            f = MongoManager.FEATURE_ID;
             enable = false;
             break;
         default:
@@ -127,24 +145,16 @@ public class MongoReplicaSetManager2 implements BeanFactoryAware {
         m_featureManager.enableLocationFeature(f, l, enable);
     }
 
-    void activeDatabase(AbstractMongoOperation operation, MongoAction action, String serverId, String fqdn) {
-        Location l = m_locationsManager.getLocationByFqdn(serverId);
+    void activateDatabase(AbstractMongoOperation operation, MongoAction action, String serverId, String fqdn) {
         String arbiterAddress = fqdn + ':' + MongoSettings.ARBITER_PORT;
         String dbAddress = fqdn + ':' + MongoSettings.SERVER_PORT;
         List<String> cmd;
-        LocationFeature f;
-        boolean enable;
         String remove = "--remove";
         switch (action) {
         case ADD_DATABASE:
             if (!waitUntilConnectionAvailable(dbAddress)) {
                 throw new UserException("Database not available " + dbAddress);
             }
-            // fallthru
-
-        case FINISH_INCOMPLETE_ADD_DATABASE:
-            f = MongoManager.ACTIVE_DATABASE;
-            enable = true;
             cmd = operation.getReplicationCommand(this, "--add", dbAddress);
             break;
 
@@ -152,23 +162,14 @@ public class MongoReplicaSetManager2 implements BeanFactoryAware {
             if (!waitUntilConnectionAvailable(arbiterAddress)) {
                 throw new UserException("Arbiter not available " + dbAddress);
             }
-            // fallthru
-
-        case FINISH_INCOMPLETE_ADD_ARBITER:
-            f = MongoManager.ACTIVE_ARBITER;
-            enable = true;
             cmd = operation.getReplicationCommand(this, "--addArbiter", arbiterAddress);
             break;
 
         case REMOVE_DATABASE:
-            f = MongoManager.FEATURE_ID;
-            enable = false;
             cmd = operation.getReplicationCommand(this, remove, dbAddress);
             break;
 
         case REMOVE_ARBITER:
-            f = MongoManager.ARBITER_FEATURE;
-            enable = false;
             cmd = operation.getReplicationCommand(this, remove, arbiterAddress);
             break;
 
@@ -176,8 +177,6 @@ public class MongoReplicaSetManager2 implements BeanFactoryAware {
             throw new IllegalStateException();
         }
         operation.run(cmd, null);
-        // roll out config
-        m_featureManager.enableLocationFeature(f, l, enable);
     }
 
     void runRequest(MongoAction action, String fqdn) {
@@ -204,7 +203,7 @@ public class MongoReplicaSetManager2 implements BeanFactoryAware {
             @Override
             public void runLater(MongoOperationRequest request) {
                 String fqdn = request.getServerId();
-                activeDatabase(this, request.getAction(), request.getServerId(), fqdn);
+                activateDatabase(this, request.getAction(), request.getServerId(), fqdn);
             }
         };
 
@@ -256,22 +255,6 @@ public class MongoReplicaSetManager2 implements BeanFactoryAware {
         // run command on server that has bad hostname.
         operations.put(MongoAction.RESET_BAD_HOSTNAMES, simpleCommand);
 
-        MongoOperation finshAdd = new AbstractMongoOperation() {
-            @Override
-            public boolean runNow(MongoOperationRequest request) {
-                String fqdn = MongoService.label(request.getServerId());
-                activeDatabase(this, request.getAction(), request.getServerId(), fqdn);
-                return false;
-            }
-
-            @Override
-            public void runLater(MongoOperationRequest request) {
-            }
-        };
-
-        operations.put(MongoAction.FINISH_INCOMPLETE_ADD_ARBITER, finshAdd);
-        operations.put(MongoAction.FINISH_INCOMPLETE_ADD_DATABASE, finshAdd);
-
         m_operations = operations;
         return operations;
     }
@@ -283,6 +266,15 @@ public class MongoReplicaSetManager2 implements BeanFactoryAware {
             try {
                 Socket test = new Socket();
                 test.connect(address, 10000);
+                if (i != 0) {
+                    // if this failed previously, then there's a chance
+                    // system just came up. Give mongo time to initialize
+                    try {
+                        Thread.sleep(10000);
+                    } catch (InterruptedException e) {
+                        LOG.error("Interrupted trying to wait for additional time for mongo init");
+                    }
+                }
                 return true;
             } catch (ConnectException e) {
                 try {
@@ -337,6 +329,11 @@ public class MongoReplicaSetManager2 implements BeanFactoryAware {
                 }
             };
             m_lastJob.start();
+            try {
+                m_lastJob.join(15000);
+            } catch (InterruptedException noProblemWeWillCheckBackLater) {
+                LOG.info("Allowing mongo configuration task to run in background");
+            }
         }
     }
 

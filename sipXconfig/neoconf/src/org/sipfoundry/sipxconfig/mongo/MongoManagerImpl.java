@@ -134,29 +134,27 @@ public class MongoManagerImpl implements AddressProvider, FeatureProvider, Mongo
     @Override
     public void featureChangePrecommit(FeatureManager manager, FeatureChangeValidator validator) {
         FeatureChangeRequest request = validator.getRequest();
-        if (!request.hasChanged(FEATURE_ID) || request.hasChanged(ACTIVE_DATABASE)) {
+        if (!request.hasChanged(FEATURE_ID)) {
             return;
         }
 
-        for (LocationFeature f : new LocationFeature[] {FEATURE_ID, ACTIVE_DATABASE}) {
-            Collection<Location> mongos = validator.getLocationsForEnabledFeature(f);
-            if (mongos.size() == 0) {
-                InvalidChangeException err = new InvalidChangeException("&error.noMongos");
-                InvalidChange needArbiter = new InvalidChange(f, err);
-                validator.getInvalidChanges().add(needArbiter);
-            } else {
-                boolean includesPrimary = false;
-                for (Location l : mongos) {
-                    includesPrimary = l.isPrimary();
-                    if (includesPrimary) {
-                        break;
-                    }
+        Collection<Location> mongos = validator.getLocationsForEnabledFeature(FEATURE_ID);
+        if (mongos.size() == 0) {
+            InvalidChangeException err = new InvalidChangeException("&error.noMongos");
+            InvalidChange needArbiter = new InvalidChange(FEATURE_ID, err);
+            validator.getInvalidChanges().add(needArbiter);
+        } else {
+            boolean includesPrimary = false;
+            for (Location l : mongos) {
+                includesPrimary = l.isPrimary();
+                if (includesPrimary) {
+                    break;
                 }
-                if (!includesPrimary) {
-                    InvalidChangeException err = new InvalidChangeException("&error.mongoOnPrimaryRequired");
-                    InvalidChange removeArbiter = new InvalidChange(f, err);
-                    validator.getInvalidChanges().add(removeArbiter);
-                }
+            }
+            if (!includesPrimary) {
+                InvalidChangeException err = new InvalidChangeException("&error.mongoOnPrimaryRequired");
+                InvalidChange removeArbiter = new InvalidChange(FEATURE_ID, err);
+                validator.getInvalidChanges().add(removeArbiter);
             }
         }
     }

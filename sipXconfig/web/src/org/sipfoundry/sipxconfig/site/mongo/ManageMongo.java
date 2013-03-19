@@ -16,11 +16,14 @@
  */
 package org.sipfoundry.sipxconfig.site.mongo;
 
+
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Map;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.tapestry.IAsset;
+import org.apache.tapestry.IRequestCycle;
 import org.apache.tapestry.annotations.Asset;
 import org.apache.tapestry.annotations.Bean;
 import org.apache.tapestry.annotations.InitialValue;
@@ -125,6 +128,15 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
         }
     }
 
+    public void onSpecificServerAction(IRequestCycle cycle) {
+        Object[] params = cycle.getListenerParameters();
+        MongoAction action = MongoAction.valueOf(params[0].toString());
+        String serverId = params[1].toString();
+        getMongoReplicaSetManager2().takeAction(action, serverId);
+        getValidator().recordSuccess(action + " on " + serverId + " complete.");
+        initializePage();
+    }
+
     @InitialValue(value = "literal:")
     public abstract String getServerAction();
 
@@ -173,7 +185,9 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
     public abstract String getCurrentSpecificServerAction();
 
     public Collection<MongoAction> getSpecificServerActions() {
-        return getActionModel().getAvailableServerActions(getMongo().getServerId());
+        MongoService service = getMongo();
+        Collection<MongoAction> none = Collections.emptyList();
+        return service == null ? none : getActionModel().getAvailableServerActions(service.getServerId());
     }
 
     public boolean isSpecificServerActionSelected() {
@@ -189,13 +203,18 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
 
     @Override
     public void pageBeginRender(PageEvent arg0) {
-        Map<String, MongoService> mongos = getMongos();
-        if (mongos == null) {
-            mongos = getMongoReplicaSetManager2().getMongoServices();
-            setMongos(mongos);
-            MongoActionModel actionModel = getMongoReplicaSetManager2().getActionModel(mongos);
-            setActionModel(actionModel);
+        if (getMongos() == null) {
+            initializePage();
         }
+    }
+
+    void initializePage() {
+        Map<String, MongoService> mongos = getMongos();
+        mongos = getMongoReplicaSetManager2().getMongoServices();
+        setMongos(mongos);
+        MongoActionModel actionModel = getMongoReplicaSetManager2().getActionModel(mongos);
+        setActionModel(actionModel);
+
         UserException lastErr = getMongoReplicaSetManager2().getLastError();
         if (lastErr != null) {
             getValidator().record(lastErr, getMessages());

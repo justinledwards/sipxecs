@@ -8,7 +8,7 @@
     <ul class="component-links">
       <li>
 	    <select jwcid="@Select" value="ognl:serverName" id="serverName">
-	      <option value=""/>
+	      <option value=""><span key="label.selectServer"/></option>
 		  <span jwcid="@For" source="ognl:serverNames" value="ognl:currentServerName">
 		    <option jwcid="@Option" selected="ognl:serverNameSelected" label="ognl:currentServerName"/>
 	      </span>
@@ -16,7 +16,7 @@
 
 	    <select jwcid="@Select" value="ognl:serverAction" id="serverAction" 
 	        onchange="literal:javascript:this.form.submit();">
-	      <option value=""/>
+	      <option value=""><span key="label.selectServerAction"/></option>
 		  <span jwcid="@For" source="ognl:serverActions" value="ognl:currentServerAction">
 		    <option jwcid="@Option" selected="ognl:serverActionSelected" label="ognl:messages.getMessage(currentServerAction)"/>
 	      </span>
@@ -38,14 +38,11 @@
       <span jwcid="stateColumnValue@Block">
           <span jwcid="@Insert" value="ognl:messages.getMessage(mongo.state)"/>
       </span>
-      <span jwcid="actionColumnValue@Block">
-	    <select jwcid="specificServerAction@Select" value="ognl:specificServerAction" id="specificServerAction"
-	       onchange="literal:javascript:this.form.submit();">
-	      <option value=""/>
+      <span jwcid="actionColumnValue@Block">      
 		  <span jwcid="@For" source="ognl:specificServerActions" value="ognl:currentSpecificServerAction">
-		    <option jwcid="@Option" selected="ognl:specificServerActionSelected" label="ognl:messages.getMessage(currentSpecificServerAction)"/>
-	      </span>
-        </select>            
+             <input jwcid="@Submit" id="mongo:action" value="ognl:messages.getMessage(currentSpecificServerAction)" 
+               listener="listener:onSpecificServerAction" parameters="ognl:{currentSpecificServerAction, mongo.serverLabel}"/>
+	      </span>	      
       </span>
     </table>
 	<ul class="component-submit">
