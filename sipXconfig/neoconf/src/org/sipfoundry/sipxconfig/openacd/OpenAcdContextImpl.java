@@ -16,6 +16,8 @@
  */
 package org.sipfoundry.sipxconfig.openacd;
 
+import static java.lang.Integer.parseInt;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -27,9 +29,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
-import static java.lang.Integer.parseInt;
-
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.sipfoundry.sipxconfig.address.Address;
 import org.sipfoundry.sipxconfig.address.AddressManager;
 import org.sipfoundry.sipxconfig.address.AddressProvider;
@@ -79,6 +81,7 @@ import org.springframework.dao.support.DataAccessUtils;
 public class OpenAcdContextImpl extends SipxHibernateDaoSupport implements OpenAcdContext, BeanFactoryAware,
         FeatureProvider, AddressProvider, ProcessProvider, DaoEventListener, FirewallProvider, SetupListener {
 
+    private static final Log LOG = LogFactory.getLog(OpenAcdContextImpl.class);
     private static final Collection<AddressType> ADDRESSES = Arrays.asList(new AddressType[] {
         OPENACD_WEB, OPENACD_SECURE_WEB
     });
@@ -267,6 +270,40 @@ public class OpenAcdContextImpl extends SipxHibernateDaoSupport implements OpenA
     }
 
     public final class DefaultExtensionException extends UserException {
+    }
+
+    /**
+     * For setup phase when there is no user to pick another extension, we cannot
+     * afford to fail.  This method picks an invalid extension, but at least one that
+     * will allow setup to proceed.  Admin can fix later.
+     */
+    void saveExtentionWithWorkaroundIfInUse(OpenAcdExtension extension, FreeswitchCondition condition) {
+        int typesOfExceptions = 3;
+        for (int i = 0; i < typesOfExceptions; i++) {
+            try {
+                saveExtension(extension);
+                return;
+            } catch (ExtensionInUseException err) {
+                LOG.error("In Use Conflict. Chosing bogus extension.", err);
+                String ext = extension.getExtension();
+                // Has to be digits
+                String newExt = String.format("^*999999999%s$", ext);
+                condition.setExpression(newExt);
+                continue;
+            } catch (NameInUseException err) {
+                LOG.error("Name Conflict. Chosing bogus name.", err);
+                String name = extension.getName();
+                String newName = String.format("^*ERROR_NAME_%s_IN_USE$", name);
+                extension.setName(newName);
+                continue;
+            } catch (SameExtensionException err) {
+                LOG.error("Same Conflict. Chosing bogus extension.", err);
+                String did = extension.getDid();
+                String newDid = String.format("^*ERROR_DID_%s_IN_USE$", did);
+                extension.setDid(newDid);
+                continue;
+            }
+        }
     }
 
     @Override
@@ -1110,6 +1147,109 @@ public class OpenAcdContextImpl extends SipxHibernateDaoSupport implements OpenA
                     " agent_release ${sip_from_user}");
             createCommand("logoff", "Default logoff dial string", "^*91$", AGENT_DP_LISTENER,
                     " agent_logoff ${sip_from_user}");
+            OpenAcdCommand login = newOpenAcdCommand();
+            FreeswitchCondition loginCondition = new FreeswitchCondition();
+            loginCondition.setField(DESTINATION_NUMBER);
+            loginCondition.setExpression("^*87$");
+            login.setName("login");
+            login.setDescription("Default login dial string");
+            FreeswitchAction loginActionAnswer = new FreeswitchAction();
+            loginActionAnswer.setApplication(ANSWER);
+            FreeswitchAction loginActionErlang = new FreeswitchAction();
+            loginActionErlang.setApplication(ERLANG_SENDMSG);
+            loginActionErlang.setData(new StringBuilder(AGENT_DP_LISTENER)
+                    .append(m_locationsManager.getPrimaryLocation().getFqdn())
+                    .append(" agent_login ${sip_from_user} pstn ${sip_from_uri}").toString());
+            FreeswitchAction loginActionSleep = new FreeswitchAction();
+            loginActionSleep.setApplication(SLEEP);
+            loginActionSleep.setData(SLEEP_MS);
+            FreeswitchAction loginActionHangup = new FreeswitchAction();
+            loginActionHangup.setApplication(HANGUP);
+            loginActionHangup.setData(NORMAL_CLEARING);
+            loginCondition.addAction(loginActionAnswer);
+            loginCondition.addAction(loginActionErlang);
+            loginCondition.addAction(loginActionSleep);
+            loginCondition.addAction(loginActionHangup);
+            login.addCondition(loginCondition);
+            saveExtentionWithWorkaroundIfInUse(login, loginCondition);
+
+            OpenAcdCommand available = newOpenAcdCommand();
+            FreeswitchCondition availableCondition = new FreeswitchCondition();
+            availableCondition.setField(DESTINATION_NUMBER);
+            availableCondition.setExpression("^*90$");
+            available.setName("available");
+            available.setDescription("Default available dial string");
+            FreeswitchAction availableActionAnswer = new FreeswitchAction();
+            availableActionAnswer.setApplication(ANSWER);
+            FreeswitchAction availableActionErlang = new FreeswitchAction();
+            availableActionErlang.setApplication(ERLANG_SENDMSG);
+            availableActionErlang.setData(new StringBuilder(AGENT_DP_LISTENER)
+                    .append(m_locationsManager.getPrimaryLocation().getFqdn())
+                    .append(" agent_available ${sip_from_user}").toString());
+            FreeswitchAction availableActionSleep = new FreeswitchAction();
+            availableActionSleep.setApplication(SLEEP);
+            availableActionSleep.setData(SLEEP_MS);
+            FreeswitchAction availableActionHangup = new FreeswitchAction();
+            availableActionHangup.setApplication(HANGUP);
+            availableActionHangup.setData(NORMAL_CLEARING);
+            availableCondition.addAction(availableActionAnswer);
+            availableCondition.addAction(availableActionErlang);
+            availableCondition.addAction(availableActionSleep);
+            availableCondition.addAction(availableActionHangup);
+            available.addCondition(availableCondition);
+            saveExtentionWithWorkaroundIfInUse(available, availableCondition);
+
+            OpenAcdCommand release = newOpenAcdCommand();
+            FreeswitchCondition releaseCondition = new FreeswitchCondition();
+            releaseCondition.setField(DESTINATION_NUMBER);
+            releaseCondition.setExpression("^*89$");
+            release.setName("release");
+            release.setDescription("Default release dial string");
+            FreeswitchAction releaseActionAnswer = new FreeswitchAction();
+            releaseActionAnswer.setApplication(ANSWER);
+            FreeswitchAction releaseActionErlang = new FreeswitchAction();
+            releaseActionErlang.setApplication(ERLANG_SENDMSG);
+            releaseActionErlang.setData(new StringBuilder(AGENT_DP_LISTENER)
+                    .append(m_locationsManager.getPrimaryLocation().getFqdn())
+                    .append(" agent_release ${sip_from_user}").toString());
+            FreeswitchAction releaseActionSleep = new FreeswitchAction();
+            releaseActionSleep.setApplication(SLEEP);
+            releaseActionSleep.setData(SLEEP_MS);
+            FreeswitchAction releaseActionHangup = new FreeswitchAction();
+            releaseActionHangup.setApplication(HANGUP);
+            releaseActionHangup.setData(NORMAL_CLEARING);
+            releaseCondition.addAction(releaseActionAnswer);
+            releaseCondition.addAction(releaseActionErlang);
+            releaseCondition.addAction(releaseActionSleep);
+            releaseCondition.addAction(releaseActionHangup);
+            release.addCondition(releaseCondition);
+            saveExtentionWithWorkaroundIfInUse(release, releaseCondition);
+
+            OpenAcdCommand logoff = newOpenAcdCommand();
+            FreeswitchCondition logoffCondition = new FreeswitchCondition();
+            logoffCondition.setField(DESTINATION_NUMBER);
+            logoffCondition.setExpression("^*91$");
+            logoff.setName("logoff");
+            logoff.setDescription("Default logoff dial string");
+            FreeswitchAction logoffActionAnswer = new FreeswitchAction();
+            logoffActionAnswer.setApplication(ANSWER);
+            FreeswitchAction logoffActionErlang = new FreeswitchAction();
+            logoffActionErlang.setApplication(ERLANG_SENDMSG);
+            logoffActionErlang.setData(new StringBuilder(AGENT_DP_LISTENER)
+                    .append(m_locationsManager.getPrimaryLocation().getFqdn())
+                    .append(" agent_logoff ${sip_from_user}").toString());
+            FreeswitchAction logoffActionSleep = new FreeswitchAction();
+            logoffActionSleep.setApplication(SLEEP);
+            logoffActionSleep.setData(SLEEP_MS);
+            FreeswitchAction logoffActionHangup = new FreeswitchAction();
+            logoffActionHangup.setApplication(HANGUP);
+            logoffActionHangup.setData(NORMAL_CLEARING);
+            logoffCondition.addAction(logoffActionAnswer);
+            logoffCondition.addAction(logoffActionErlang);
+            logoffCondition.addAction(logoffActionSleep);
+            logoffCondition.addAction(logoffActionHangup);
+            logoff.addCondition(logoffCondition);
+            saveExtentionWithWorkaroundIfInUse(logoff, logoffCondition);
             manager.setTrue(id);
         }
 
