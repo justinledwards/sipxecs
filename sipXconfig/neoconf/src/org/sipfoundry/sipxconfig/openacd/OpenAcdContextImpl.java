@@ -16,6 +16,8 @@
  */
 package org.sipfoundry.sipxconfig.openacd;
 
+import static java.lang.Integer.parseInt;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -27,9 +29,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
-import static java.lang.Integer.parseInt;
-
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.sipfoundry.sipxconfig.address.Address;
 import org.sipfoundry.sipxconfig.address.AddressManager;
 import org.sipfoundry.sipxconfig.address.AddressProvider;
@@ -79,6 +81,7 @@ import org.springframework.dao.support.DataAccessUtils;
 public class OpenAcdContextImpl extends SipxHibernateDaoSupport implements OpenAcdContext, BeanFactoryAware,
         FeatureProvider, AddressProvider, ProcessProvider, DaoEventListener, FirewallProvider, SetupListener {
 
+    private static final Log LOG = LogFactory.getLog(OpenAcdContextImpl.class);
     private static final Collection<AddressType> ADDRESSES = Arrays.asList(new AddressType[] {
         OPENACD_WEB, OPENACD_SECURE_WEB
     });
@@ -249,6 +252,45 @@ public class OpenAcdContextImpl extends SipxHibernateDaoSupport implements OpenA
         getHibernateTemplate().flush();
     }
 
+    public final class DefaultExtensionException extends UserException {
+    }
+
+    /**
+     * For setup phase when there is no user to pick another extension, we cannot
+     * afford to fail.  This method picks an invalid extension, but at least one that
+     * will allow setup to proceed.  Admin can fix later.
+     */
+    void saveExtentionWithWorkaroundIfInUse(OpenAcdExtension extension, FreeswitchCondition condition) {
+        int typesOfExceptions = 3;
+        for (int i = 0; i < typesOfExceptions; i++) {
+            try {
+                saveExtension(extension);
+                return;
+            } catch (ExtensionInUseException err) {
+                LOG.error("In Use Conflict. Chosing bogus extension.", err);
+                String ext = extension.getExtension();
+                // Has to be digits
+                String newExt = String.format("^*999999999%s$", ext);
+                condition.setExpression(newExt);
+                continue;
+            } catch (NameInUseException err) {
+                LOG.error("Name Conflict. Chosing bogus name.", err);
+                String name = extension.getName();
+                String newName = String.format("^*ERROR_NAME_%s_IN_USE$", name);
+                extension.setName(newName);
+                continue;
+            } catch (SameExtensionException err) {
+                LOG.error("Same Conflict. Chosing bogus extension.", err);
+                String did = extension.getDid();
+                String newDid = String.format("^*ERROR_DID_%s_IN_USE$", did);
+                extension.setDid(newDid);
+                continue;
+            }
+        }
+    }
+
+    @Override
+>>>>>>> release-4.6-openacd-integration
     public void saveExtension(OpenAcdExtension extension) {
         if (extension.getName() == null) {
             throw new UserException("&null.name");
@@ -1081,6 +1123,14 @@ public class OpenAcdContextImpl extends SipxHibernateDaoSupport implements OpenA
     public boolean setup(SetupManager manager) {
         String id = "init-openacd-commands";
         if (!manager.isTrue(id)) {
+            createCommand("login", OPEN_ACD_LOGIN_EXTENSION_DESCRIPTION, "^*87$", AGENT_DP_LISTENER,
+                    " agent_login ${sip_from_user} pstn ${sip_from_uri}");
+            createCommand("available", "Default available dial string", "^*90$", AGENT_DP_LISTENER,
+                    " agent_available ${sip_from_user}");
+            createCommand("release", "Default release dial string", "^*89$", AGENT_DP_LISTENER,
+                    " agent_release ${sip_from_user}");
+            createCommand("logoff", "Default logoff dial string", "^*91$", AGENT_DP_LISTENER,
+                    " agent_logoff ${sip_from_user}");
             OpenAcdCommand login = newOpenAcdCommand();
             FreeswitchCondition loginCondition = new FreeswitchCondition();
             loginCondition.setField(DESTINATION_NUMBER);
@@ -1105,7 +1155,7 @@ public class OpenAcdContextImpl extends SipxHibernateDaoSupport implements OpenA
             loginCondition.addAction(loginActionSleep);
             loginCondition.addAction(loginActionHangup);
             login.addCondition(loginCondition);
-            saveExtension(login);
+            saveExtentionWithWorkaroundIfInUse(login, loginCondition);
 
             OpenAcdCommand available = newOpenAcdCommand();
             FreeswitchCondition availableCondition = new FreeswitchCondition();
@@ -1131,7 +1181,7 @@ public class OpenAcdContextImpl extends SipxHibernateDaoSupport implements OpenA
             availableCondition.addAction(availableActionSleep);
             availableCondition.addAction(availableActionHangup);
             available.addCondition(availableCondition);
-            saveExtension(available);
+            saveExtentionWithWorkaroundIfInUse(available, availableCondition);
 
             OpenAcdCommand release = newOpenAcdCommand();
             FreeswitchCondition releaseCondition = new FreeswitchCondition();
@@ -1157,7 +1207,7 @@ public class OpenAcdContextImpl extends SipxHibernateDaoSupport implements OpenA
             releaseCondition.addAction(releaseActionSleep);
             releaseCondition.addAction(releaseActionHangup);
             release.addCondition(releaseCondition);
-            saveExtension(release);
+            saveExtentionWithWorkaroundIfInUse(release, releaseCondition);
 
             OpenAcdCommand logoff = newOpenAcdCommand();
             FreeswitchCondition logoffCondition = new FreeswitchCondition();
@@ -1183,7 +1233,7 @@ public class OpenAcdContextImpl extends SipxHibernateDaoSupport implements OpenA
             logoffCondition.addAction(logoffActionSleep);
             logoffCondition.addAction(logoffActionHangup);
             logoff.addCondition(logoffCondition);
-            saveExtension(logoff);
+            saveExtentionWithWorkaroundIfInUse(logoff, logoffCondition);
             manager.setTrue(id);
         }
 
