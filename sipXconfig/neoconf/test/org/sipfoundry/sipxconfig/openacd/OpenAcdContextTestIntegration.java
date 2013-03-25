@@ -84,7 +84,7 @@ public class OpenAcdContextTestIntegration extends MongoTestIntegration {
     private static String[][] AGENT_DIAL_SRING_ACTIONS = {
         {
             "erlang_sendmsg",
-            "agent_dialplan_listener testme@localhost agent_login ${sip_from_user}"
+            "agent_dialplan_listener testme@localhost agent_login ${sip_from_user} pstn ${sip_from_uri}"
         }, {
             "answer", ""
         }, {
@@ -299,13 +299,14 @@ public class OpenAcdContextTestIntegration extends MongoTestIntegration {
     }
 
     public void testOpenAcdCommandCrud() throws Exception {
-        // test existing 'login' and 'logout' default agent dial strings
-        assertEquals(2, m_openAcdContext.getCommands().size());
+        // test existing 'login', 'logout', 'go available' and 'release' default agent dial
+        // strings
+        assertEquals(4, m_openAcdContext.getCommands().size());
 
         // test save agent dial string
         OpenAcdCommand dialString = createOpenAcdAgentDialString("test");
         m_openAcdContext.saveExtension(dialString);
-        assertEquals(3, m_openAcdContext.getCommands().size());
+        assertEquals(5, m_openAcdContext.getCommands().size());
 
         // test save agent dial string with same name
         try {
@@ -332,9 +333,9 @@ public class OpenAcdContextTestIntegration extends MongoTestIntegration {
         assertEquals("test", dialStringById.getName());
 
         // test remove agent dial string
-        assertEquals(3, m_openAcdContext.getFreeswitchExtensions().size());
+        assertEquals(5, m_openAcdContext.getFreeswitchExtensions().size());
         m_openAcdContext.deleteExtension(dialStringById);
-        assertEquals(2, m_openAcdContext.getFreeswitchExtensions().size());
+        assertEquals(4, m_openAcdContext.getFreeswitchExtensions().size());
     }
 
     public void testOpenAcdExtensionAliasProvider() throws Exception {

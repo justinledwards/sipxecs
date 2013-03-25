@@ -35,10 +35,6 @@ public interface OpenAcdContext extends FreeswitchExtensionProvider, AliasOwner 
     public static final String MAGIC_SKILL_GROUP_NAME = "Magic";
     public static final String GROUP_NAME_DEFAULT = "Default";
     public static final String OPENACD_LOG = "/full.log";
-    // commands
-    static final String OPEN_ACD_PREFIX_EXTENSION = "openacd_";
-    static final String OPEN_ACD_LOGIN_EXTENSION_NAME = "openacd_login";
-    static final String OPEN_ACD_LOGOUT_EXTENSION_NAME = "openacd_logout";
     //Mongo constants
     static final String QUEUE_GROUP = "qgrp";
     static final String SKILLS = "skl";

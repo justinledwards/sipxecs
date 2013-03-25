@@ -16,10 +16,6 @@
  */
 package org.sipfoundry.sipxconfig.site.openacd;
 
-import static org.sipfoundry.sipxconfig.openacd.OpenAcdContext.OPEN_ACD_LOGOUT_EXTENSION_NAME;
-import static org.sipfoundry.sipxconfig.openacd.OpenAcdContext.OPEN_ACD_LOGIN_EXTENSION_NAME;
-import static org.sipfoundry.sipxconfig.openacd.OpenAcdContext.OPEN_ACD_PREFIX_EXTENSION;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedList;
@@ -94,10 +90,6 @@ public abstract class EditOpenAcdCommand extends PageWithCallback implements Pag
 
     public abstract void setActions(Collection<ActionBean> actions);
 
-    public abstract boolean isDisabled();
-
-    public abstract void setDisabled(boolean disabled);
-
     @Override
     public void pageBeginRender(PageEvent event) {
         super.pageEndRender(event);
@@ -112,11 +104,6 @@ public abstract class EditOpenAcdCommand extends PageWithCallback implements Pag
             setEnabled(line.isEnabled());
             setDescription(line.getDescription());
             setLineNumber(line.getNumberCondition().getExtension());
-            String lineName = line.getName();
-            if (lineName.equals(OPEN_ACD_LOGIN_EXTENSION_NAME) || lineName.equals(OPEN_ACD_LOGOUT_EXTENSION_NAME)) {
-                setName(StringUtils.stripStart(lineName, OPEN_ACD_PREFIX_EXTENSION));
-                setDisabled(true);
-            }
         }
 
         List<ActionBean> actionBeans = new LinkedList<ActionBean>();

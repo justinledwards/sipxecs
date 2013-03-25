@@ -115,9 +115,6 @@ public class OpenAcdContextImpl extends SipxHibernateDaoSupport implements OpenA
     private static final String HANGUP = "hangup";
     private static final String NORMAL_CLEARING = "NORMAL CLEARING";
     private static final String AGENT_DP_LISTENER = "agent_dialplan_listener openacd@";
-    private static final String OACD_DP_LISTENER = "oacd_dialplan_listener openacd@";
-    private static final String OPEN_ACD_LOGIN_EXTENSION_DESCRIPTION = "Default log in dial string";
-    private static final String OPEN_ACD_LOGOUT_EXTENSION_DESCRIPTION = "Default log out dial string";
 
     private AliasManager m_aliasManager;
     private FeatureManager m_featureManager;
@@ -250,23 +247,9 @@ public class OpenAcdContextImpl extends SipxHibernateDaoSupport implements OpenA
         return m_featureManager.isFeatureEnabled(FEATURE);
     }
 
-    @Override
     public void deleteExtension(OpenAcdExtension ext) {
-        if (ext.getName().equals(OPEN_ACD_LOGIN_EXTENSION_NAME)
-                || ext.getName().equals(OPEN_ACD_LOGOUT_EXTENSION_NAME)) {
-            throw new DefaultExtensionException();
-        } else {
-            getHibernateTemplate().delete(ext);
-            getHibernateTemplate().flush();
-        }
-    }
-
-    private void deleteExtensions() {
-        Set<OpenAcdCommand> commands = getCommands();
-        for (OpenAcdExtension extension : commands) {
-            deleteExtension(extension);
-        }
-        getDaoEventPublisher().publishDeleteCollection(commands);
+        getHibernateTemplate().delete(ext);
+        getHibernateTemplate().flush();
     }
 
     public final class DefaultExtensionException extends UserException {
@@ -1139,14 +1122,6 @@ public class OpenAcdContextImpl extends SipxHibernateDaoSupport implements OpenA
     public boolean setup(SetupManager manager) {
         String id = "init-openacd-commands";
         if (!manager.isTrue(id)) {
-            createCommand("login", OPEN_ACD_LOGIN_EXTENSION_DESCRIPTION, "^*87$", AGENT_DP_LISTENER,
-                    " agent_login ${sip_from_user} pstn ${sip_from_uri}");
-            createCommand("available", "Default available dial string", "^*90$", AGENT_DP_LISTENER,
-                    " agent_available ${sip_from_user}");
-            createCommand("release", "Default release dial string", "^*89$", AGENT_DP_LISTENER,
-                    " agent_release ${sip_from_user}");
-            createCommand("logoff", "Default logoff dial string", "^*91$", AGENT_DP_LISTENER,
-                    " agent_logoff ${sip_from_user}");
             OpenAcdCommand login = newOpenAcdCommand();
             FreeswitchCondition loginCondition = new FreeswitchCondition();
             loginCondition.setField(DESTINATION_NUMBER);
@@ -1265,52 +1240,7 @@ public class OpenAcdContextImpl extends SipxHibernateDaoSupport implements OpenA
             }
         }
 
-        // delete all openacd dial strings
-        // and recreate only 'login' and 'logout' with the properly values
-        String updateOpenacdCommands = "update-openacd-commands";
-        if (!manager.isTrue(updateOpenacdCommands)) {
-            deleteExtensions();
-            OpenAcdCommand login = createCommand(OPEN_ACD_LOGIN_EXTENSION_NAME,
-                    OPEN_ACD_LOGIN_EXTENSION_DESCRIPTION, "^*80$", OACD_DP_LISTENER, " agent_login ${sip_from_user}");
-            getDaoEventPublisher().publishSave(login);
-            OpenAcdCommand logout = createCommand(OPEN_ACD_LOGOUT_EXTENSION_NAME,
-                    OPEN_ACD_LOGOUT_EXTENSION_DESCRIPTION, "^*81$", OACD_DP_LISTENER,
-                    " agent_logout ${sip_from_user}");
-            getDaoEventPublisher().publishSave(logout);
-            manager.setTrue(updateOpenacdCommands);
-        }
-
         return true;
-    }
-
-    private OpenAcdCommand createCommand(String commandName, String commandDescription, String expresion,
-            String listener, String data) {
-        OpenAcdCommand command = newOpenAcdCommand();
-        command.setName(commandName);
-        command.setDescription(commandDescription);
-        FreeswitchCondition commandCondition = new FreeswitchCondition();
-        commandCondition.setField(DESTINATION_NUMBER);
-        commandCondition.setExpression(expresion);
-        FreeswitchAction commandActionAnswer = new FreeswitchAction();
-        commandActionAnswer.setApplication(ANSWER);
-        FreeswitchAction commandActionErlang = new FreeswitchAction();
-        commandActionErlang.setApplication(ERLANG_SENDMSG);
-        commandActionErlang.setData(new StringBuilder(listener)
-                .append(m_locationsManager.getPrimaryLocation().getFqdn()).append(data).toString());
-        FreeswitchAction commandActionSleep = new FreeswitchAction();
-        commandActionSleep.setApplication(SLEEP);
-        commandActionSleep.setData(SLEEP_MS);
-        FreeswitchAction commandActionHangup = new FreeswitchAction();
-        commandActionHangup.setApplication(HANGUP);
-        commandActionHangup.setData(NORMAL_CLEARING);
-        commandCondition.addAction(commandActionAnswer);
-        commandCondition.addAction(commandActionErlang);
-        commandCondition.addAction(commandActionSleep);
-        commandCondition.addAction(commandActionHangup);
-        command.addCondition(commandCondition);
-        saveExtension(command);
-
-        return command;
     }
 
     public void setAliasManager(AliasManager aliasManager) {

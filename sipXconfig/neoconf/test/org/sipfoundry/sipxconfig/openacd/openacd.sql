@@ -31,32 +31,64 @@ insert into openacd_skill_queue (openacd_queue_id, openacd_skill_id)
 insert into openacd_skill_queue (openacd_queue_id, openacd_skill_id)
   values ((select openacd_queue_id from openacd_queue where name = 'default_queue'), (select openacd_skill_id from openacd_skill where name = 'Node'));
 
--- log in
+-- login
 insert into freeswitch_extension (freeswitch_ext_id, name, description, freeswitch_ext_type, did, alias, enabled)
   values (nextval('freeswitch_ext_seq'), 'login', 'Default login dial string', 'C', NULL, NULL, false);
 insert into freeswitch_condition (freeswitch_condition_id, field, expression, freeswitch_ext_id)
-  values (nextval('freeswitch_condition_seq'), 'destination_number', '^*80$', (select currval('freeswitch_ext_seq')));
+  values (nextval('freeswitch_condition_seq'), 'destination_number', '^*87$', (select currval('freeswitch_ext_seq')));
 insert into freeswitch_action (freeswitch_action_id, application, data, freeswitch_condition_id)
   values (nextval('freeswitch_action_seq'), 'answer', NULL, (select currval('freeswitch_condition_seq')));
 insert into freeswitch_action (freeswitch_action_id, application, data, freeswitch_condition_id)
   values (nextval('freeswitch_action_seq'), 'erlang_sendmsg',
-  'oacd_dialplan_listener openacd@' || (select fqdn from location where primary_location = true) || ' agent_login ${sip_from_user}',
+  'agent_dialplan_listener openacd@' || (select fqdn from location where primary_location = true) || ' agent_login ${sip_from_user} pstn ${sip_from_uri}',
   (select currval('freeswitch_condition_seq')));
 insert into freeswitch_action (freeswitch_action_id, application, data, freeswitch_condition_id)
   values (nextval('freeswitch_action_seq'), 'sleep', '2000', (select currval('freeswitch_condition_seq')));
 insert into freeswitch_action (freeswitch_action_id, application, data, freeswitch_condition_id)
   values (nextval('freeswitch_action_seq'), 'hangup', 'NORMAL_CLEARING', (select currval('freeswitch_condition_seq')));
 
--- log out
+-- available
 insert into freeswitch_extension (freeswitch_ext_id, name, description, freeswitch_ext_type, did, alias, enabled)
-  values (nextval('freeswitch_ext_seq'), 'logout', 'Default logoout dial string', 'C', NULL, NULL, false);
+  values (nextval('freeswitch_ext_seq'), 'available', 'Default available dial string', 'C', NULL, NULL, false);
 insert into freeswitch_condition (freeswitch_condition_id, field, expression, freeswitch_ext_id)
-  values (nextval('freeswitch_condition_seq'), 'destination_number', '^*81$', (select currval('freeswitch_ext_seq')));
+  values (nextval('freeswitch_condition_seq'), 'destination_number', '^*90$', (select currval('freeswitch_ext_seq')));
 insert into freeswitch_action (freeswitch_action_id, application, data, freeswitch_condition_id)
   values (nextval('freeswitch_action_seq'), 'answer', NULL, (select currval('freeswitch_condition_seq')));
 insert into freeswitch_action (freeswitch_action_id, application, data, freeswitch_condition_id)
   values (nextval('freeswitch_action_seq'), 'erlang_sendmsg',
-  'oacd_dialplan_listener openacd@' || (select fqdn from location where primary_location = true) || ' agent_logout ${sip_from_user}',
+  'agent_dialplan_listener openacd@' || (select fqdn from location where primary_location = true) || ' agent_available ${sip_from_user}',
+  (select currval('freeswitch_condition_seq')));
+insert into freeswitch_action (freeswitch_action_id, application, data, freeswitch_condition_id)
+  values (nextval('freeswitch_action_seq'), 'sleep', '2000', (select currval('freeswitch_condition_seq')));
+insert into freeswitch_action (freeswitch_action_id, application, data, freeswitch_condition_id)
+  values (nextval('freeswitch_action_seq'), 'hangup', 'NORMAL_CLEARING', (select currval('freeswitch_condition_seq')));
+
+-- release
+insert into freeswitch_extension (freeswitch_ext_id, name, description, freeswitch_ext_type, did, alias, enabled)
+  values (nextval('freeswitch_ext_seq'), 'release', 'Default release dial string', 'C', NULL, NULL, false);
+insert into freeswitch_condition (freeswitch_condition_id, field, expression, freeswitch_ext_id)
+  values (nextval('freeswitch_condition_seq'), 'destination_number', '^*91$', (select currval('freeswitch_ext_seq')));
+insert into freeswitch_action (freeswitch_action_id, application, data, freeswitch_condition_id)
+  values (nextval('freeswitch_action_seq'), 'answer', NULL, (select currval('freeswitch_condition_seq')));
+insert into freeswitch_action (freeswitch_action_id, application, data, freeswitch_condition_id)
+  values (nextval('freeswitch_action_seq'), 'erlang_sendmsg',
+  'agent_dialplan_listener openacd@' || (select fqdn from location where primary_location = true) || ' agent_release ${sip_from_user}',
+  (select currval('freeswitch_condition_seq')));
+insert into freeswitch_action (freeswitch_action_id, application, data, freeswitch_condition_id)
+  values (nextval('freeswitch_action_seq'), 'sleep', '2000', (select currval('freeswitch_condition_seq')));
+insert into freeswitch_action (freeswitch_action_id, application, data, freeswitch_condition_id)
+  values (nextval('freeswitch_action_seq'), 'hangup', 'NORMAL_CLEARING', (select currval('freeswitch_condition_seq')));
+
+-- logoff
+insert into freeswitch_extension (freeswitch_ext_id, name, description, freeswitch_ext_type, did, alias, enabled)
+  values (nextval('freeswitch_ext_seq'), 'logoff', 'Default logoff dial string', 'C', NULL, NULL, false);
+insert into freeswitch_condition (freeswitch_condition_id, field, expression, freeswitch_ext_id)
+  values (nextval('freeswitch_condition_seq'), 'destination_number', '^*89$', (select currval('freeswitch_ext_seq')));
+insert into freeswitch_action (freeswitch_action_id, application, data, freeswitch_condition_id)
+  values (nextval('freeswitch_action_seq'), 'answer', NULL, (select currval('freeswitch_condition_seq')));
+insert into freeswitch_action (freeswitch_action_id, application, data, freeswitch_condition_id)
+  values (nextval('freeswitch_action_seq'), 'erlang_sendmsg',
+  'agent_dialplan_listener openacd@' || (select fqdn from location where primary_location = true) || ' agent_logoff ${sip_from_user}',
   (select currval('freeswitch_condition_seq')));
 insert into freeswitch_action (freeswitch_action_id, application, data, freeswitch_condition_id)
   values (nextval('freeswitch_action_seq'), 'sleep', '2000', (select currval('freeswitch_condition_seq')));
