@@ -1,0 +1,262 @@
+#!/bin/env python
+
+# Copyright (c) 2013 eZuce, Inc. All rights reserved. 
+# Contributed to SIPfoundry under a Contributor Agreement 
+# 
+# This software is free software; you can redistribute it and/or modify it under 
+# the terms of the Affero General Public License (AGPL) as published by the 
+# Free Software Foundation; either version 3 of the License, or (at your option) 
+# any later version. 
+# 
+# This software is distributed in the hope that it will be useful, but WITHOUT 
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS 
+# FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more 
+# details.
+
+# Just gather all the status and configuration of a set of mongo servers and provide
+# a higher level of status of the cluster as whole. 
+
+# Meant to be used as the first part of the set of three mongodb
+# detailed below and in each script:
+#
+# Part 1.) mongodb-status assesses the health of a system
+# Part 2.) mongodb-analyzer takes the results from mongodb-status 
+#  and comes with with a set of recommended tasks to bring the
+#  cluster back into a health state if it decided it's not in a
+#  healthy state. Tasks are broken up into a list of zero or more
+#  tasks for each server.
+# Part 3.) mongodb-admin then takes a set of tasks interpretted by
+#   an admin at the command prompt or fed into a user interface 
+#   for the admin to select which tasks they's like to perform on
+#    which server.  The tasks are then passed to the mongodb-admin
+#    script on the appropriate server to execute.
+
+
+# Deprecation note: intentionally using deprecated Connection class because 
+# class MongoClient is not available yet in pymongo on centos 6
+from pymongo import Connection
+from pymongo.errors import PyMongoError, AutoReconnect
+from sets import Set
+
+import sys
+import traceback
+import logging
+import argparse
+import json
+import bson.timestamp
+import datetime
+
+analyzers = []
+
+class CheckReplSet:
+    def __init__(self, replSet):
+        self.replSet = replSet
+
+    def analyze(self, meta): 
+        for host, host_meta in meta.meta.items():
+            if 'status' in host_meta and 'set' in host_meta['status']:
+                if host_meta['status']['set'] != self.replSet:
+                    meta.server_states[host].append('BAD_REPLSET_' + host_meta['type'])
+                elif 'config' in host_meta and '_id' in host_meta['config']:
+                    if host_meta['config']['_id'] != self.replSet:
+                        meta.server_states[host].append('BAD_REPLSET_' + host_meta['type'])
+
+class CheckHostnameOrMissingConfig:
+    def analyze(self, meta):        
+        for host, host_meta in meta.meta.items():
+            status, config = meta.member(host)
+            if not host_meta['available']:
+                if host_meta['type'] == 'ARBITER':
+                    meta.server_states[host].append('UNAVAILABLE_ARBITER')
+                else:
+                    meta.server_states[host].append('UNAVAILABLE_DATABASE')                
+            elif config == None:
+                if host_meta['type'] == 'ARBITER':
+                    meta.server_states[host].append('MISSING_ARBITER')
+                else:
+                    meta.server_states[host].append('MISSING_DATABASE')
+            elif 'host' in config and config['host'] != host:
+                meta.server_states[host].append('HOSTNAME_MISMATCH')
+
+analyzers.append(CheckHostnameOrMissingConfig())
+
+class CheckPrimaries:
+    def analyze(self, meta):        
+        primaries = Set()        
+        findPrimaries = lambda host, status: status['stateStr'] == 'PRIMARY'
+        for host, status in meta.statusMembers(findPrimaries):
+            primaries.add(status['name'])
+        if len(primaries) == 0:
+            meta.cluster_states.append('NO_PRIMARY')
+        if len(primaries) > 1:
+            meta.cluster_states.append('MULTIPLE_PRIMARIES')
+        for primary in primaries:
+            meta.server_states[primary].append('PRIMARY')
+
+analyzers.append(CheckPrimaries())
+
+class MongoMeta:
+    def __init__(self, meta):
+        self.meta = meta
+        self.cluster_states = []
+        self.server_states = {}
+        for host in meta.keys():
+            self.server_states[host] = []
+
+    def __getitem__(self, host):
+        return self.meta[host]
+
+    def statusMembers(self, predicate):        
+        return self._configOrStatus(predicate, 'status')
+
+    def configMembers(self, predicate):        
+        return self._configOrStatus(predicate, 'config')
+
+    def member(self, host):
+        myStatus = lambda h, s: 'self' in s and host == h
+        for host, status in self.statusMembers(myStatus):
+            myConfig = lambda h, c: c['host'] == status['name']
+            for host, config in self.configMembers(myConfig):
+                return status, config
+            return status, None
+        return None, None
+
+    def _configOrStatus(self, predicate, config_or_status):
+        for host, meta in self.meta.items():
+            if config_or_status in meta:
+                if meta[config_or_status] and 'members' in meta[config_or_status]:
+                    for member in meta[config_or_status]['members']:
+                        if predicate(host, member):
+                            yield host, member
+        return
+
+class MongoAdmin:
+    def __init__(self, servers, arbiters):
+        # ensure unicode because host names will be unicode if reading a dump
+        if servers:
+            self.servers = [unicode(s) for s in servers]
+        else:
+            self.servers = []
+        if arbiters:
+            self.arbiters = [unicode(s) for s in arbiters]
+        else:
+            self.arbiters = []
+
+    def dump(self):
+        meta = self.loadMeta()
+        sys.stdout.write(json.dumps(meta, cls=MongoJSONEncoder, indent=4, separators=(',', ': ')))
+
+    def parse(self):
+        meta = json.load(sys.stdin)
+        self.statusFromMeta(meta)
+
+    def status(self):
+        self.statusFromMeta(self.loadMeta())
+
+    def statusFromMeta(self, m):
+        meta = MongoMeta(m)
+        for analyzer in analyzers:
+            analyzer.analyze(meta)
+        sys.stdout.write(json.dumps(meta.cluster_states, cls=MongoJSONEncoder))
+        print
+        sys.stdout.write(json.dumps(meta.server_states, cls=MongoJSONEncoder))
+        print
+
+    def eval(self, db, command):
+        logging.debug(command)
+        return db.eval(command)
+
+    def loadMetaForHost(self, host_port):
+        m = None
+        c = None
+        cfg = None
+        try:
+            c = Connection(host_port)
+            logging.debug('getting status')
+            l = c['local']
+            cfg = self.eval(l, 'rs.config()')
+            status = self.eval(l, 'rs.status()')
+            m = {'server' : host_port, 'available': True, 'status' : status, 'config' : cfg}
+            c.close
+            c = None
+
+        except PyMongoError as e:
+            m = {'server' : host_port, 'available' : False}
+
+        finally:
+            if c != None:
+                logging.debug('closing connection')
+                c.close()
+
+        return m
+    
+    def loadMeta(self):
+        meta = {}
+        for h in self.servers:
+            m = self.loadMetaForHost(h)
+            m['type'] = 'DATABASE'
+            meta[h] = m
+        for h in self.arbiters:
+            m = self.loadMetaForHost(h)
+            m['type'] = 'ARBITER'
+            meta[h] = m
+        return meta
+
+class MongoJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, bson.timestamp.Timestamp):
+            return obj.time
+        elif isinstance(obj, datetime.datetime):
+            return obj.isoformat()
+        else:
+            return super(MongoJSONEncoder, self).default(obj)    
+
+if __name__ == '__main__':
+    c = None
+    # Parse arguments
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description='Mongo/sipXecs administration tools'
+        )
+    parser.formatter_class = argparse.ArgumentDefaultsHelpFormatter
+    parser.add_argument('--servers',  metavar='host[:port]', nargs='+', required=False, default=[],
+                help='server[:port] to connect to')
+    parser.add_argument('--arbiters',  metavar='host[:port]', nargs='+', required=False, default=[],
+                help='server[:port] to connect to')
+    parser.add_argument('--dump', action="store_true", default=False,
+                help='Dump the cluster data to JSON format to stdout before any analysis has been done')
+    parser.add_argument('--parse', action="store_true", default=False,
+                help='Read the dump from stdin from a cluster and then analyze status')
+    parser.add_argument('--verbose', action="store_true", default=False,
+                help='verbose output')
+    parser.add_argument('--replSet', metavar="name", required=True,
+                help='Expected replset name for servers')
+    args = vars(parser.parse_args())
+
+    try:
+        level = None
+        if args['verbose']:
+            level = logging.DEBUG        
+        logging.basicConfig(
+            level=level,
+            format='.%(message)s'
+        )
+
+        admin = MongoAdmin(args['servers'], args['arbiters'])
+        analyzers.append(CheckReplSet(args['replSet']))
+        if args['dump']:
+            admin.dump()
+        elif args['parse']:
+            admin.parse()
+        else:
+            admin.status()
+
+    except :
+        sys.stderr.write(traceback.format_exc())
+        sys.stderr.write('\n')
+        exit(1)
+            
+    finally:
+        if c != None:
+            logging.debug('closing connection')
+            c.close()

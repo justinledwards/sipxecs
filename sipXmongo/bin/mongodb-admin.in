@@ -1,0 +1,360 @@
+#!/bin/env python
+
+# Copyright (c) 2013 eZuce, Inc. All rights reserved. 
+# Contributed to SIPfoundry under a Contributor Agreement 
+# 
+# This software is free software; you can redistribute it and/or modify it under 
+# the terms of the Affero General Public License (AGPL) as published by the 
+# Free Software Foundation; either version 3 of the License, or (at your option) 
+# any later version. 
+# 
+# This software is distributed in the hope that it will be useful, but WITHOUT 
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS 
+# FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more 
+# details.
+
+# Mongo adminstration operations. Replicaset and server management tasks. 
+
+# Tasks are submitted on CLI thru parameter or stdin in a particular but
+# primative format:
+#  TASK_NAME arguments...
+#
+# Meant to be used as the third part of the set of three mongodb
+# detailed below and in each script:
+#
+# Part 1.) mongodb-status assesses the health of a system
+# Part 2.) mongodb-analyzer takes the results from mongodb-status 
+#  and comes with with a set of recommended tasks to bring the
+#  cluster back into a health state if it decided it's not in a
+#  healthy state. Tasks are broken up into a list of zero or more
+#  tasks for each server.
+# Part 3.) mongodb-admin then takes a set of tasks interpretted by
+#   an admin at the command prompt or fed into a user interface 
+#   for the admin to select which tasks they's like to perform on
+#    which server.  The tasks are then passed to the mongodb-admin
+#    script on the appropriate server to execute.
+
+# Deprecation note: intentionally using deprecated Connection class because 
+# class MongoClient is not available yet in pymongo on centos 6
+from pymongo import Connection
+from pymongo.errors import PyMongoError, AutoReconnect
+
+import sys
+import re
+import os
+import traceback
+import logging
+import argparse
+import commands
+import json
+import struct
+
+REDHAT_CONFIG_FILE = "/etc/mongodb.conf"
+TENGEN_CONFIG_FILE = "/etc/mongod.conf"
+ARBITER_CONFIG_FILE = "/etc/mongod-arbiter.conf"
+
+class DryRunConnection:
+    def __init__(self, host, port):        
+        self.host = host
+        self.port = port
+
+    def __getitem__(self, db):
+        db = lambda:0
+        db.connection = self
+        return db
+
+    def close(self):
+        pass
+
+class MongoAdminException(Exception):    
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
+
+class MongoRSAdmin:
+    def __init__(self, host, port, replSet, dryrun):
+        self.host = host
+        self.port = port
+        self.host_port = '%s:%d' % (host, port)
+        self.dryrun = dryrun
+        self.replSet = replSet
+
+    def run(self, args):
+        member_name = 'cmd_' + args[0]
+        try :
+            member = getattr(admin, member_name)
+            member(*args[1:])
+
+        except AttributeError as e:
+            raise MongoAdminException("invalid command " + args[0])
+
+    def cmd_REMOVE_ARBITER(self, host_port):
+        self.mongoCommand(self.basicOperation('remove', host_port))
+
+    def cmd_ADD_ARBITER(self, host_port):
+        self.mongoCommand(self.basicOperation('addArb', host_port))
+
+    def cmd_ADD_DATABASE(self, host_port):
+        self.mongoCommand(self.basicOperation('add', host_port))
+
+    def requireReplSet(self):
+        if not self.replSet:
+            raise MongoAdminException("--replSet parameter required")
+
+    def cmd_INITIALIZE(self, host_port):
+        self.requireReplSet()
+        def functor(c):
+            l = c['local']
+            config = self.eval(l, 'rs.config()')
+            if None == config:
+                op = 'rs.initiate({"_id" : "%s", "version" : 1, "members" : ' \
+                    '[{ "_id" : 0, "host" : "%s"}]})' % (self.replSet, self.host_port)
+                logging.debug('initializing replicaset')
+                self.checkErr(self.eval(l, op))
+            else:
+                logging.debug('replicaset already initialized')                
+        self.mongoCommand(functor)
+
+    def cmd_FORCE_PRIMARY(self, host_port):
+        self.requireReplSet()
+        # all other servers need to be restarted before they can be added back in, 
+        # otherwise they will get following errors:
+        #
+        #   [rsMgr] replSet error unexpected exception in haveNewConfig() : 0 assertion db/repl/rs.cpp:440
+        #   [rsMgr] replSet error fatal, stopping replication
+        #
+        def functor(c):
+            l = c['local']
+            config = self.eval(l, "rs.config()")
+            id = None
+            maxId = 0
+            for m in config['members']:
+                if m['host'] == self.host_port:
+                    id = m['_id']
+                    break
+                maxId = max(maxId, m['_id'])
+
+            if id == None:
+                id = maxId + 1
+
+            cmd = 'rs.reconfig({"_id" : "%s", "members" : ' \
+                  '[{"_id" : %s, "host" : "%s"}]}, {force : true})' \
+                  % (self.replSet, id, host_port)
+            config = self.eval(l, cmd)
+        self.mongoCommand(functor)
+        self.cmd_INITIALIZE(host_port)
+
+    def cmd_RESYNC_FROM(self, host_port):
+        print "TODO"
+        
+    def cmd_RENAME(self, primary, member_index, new_name):
+        def functor(c):
+            l = c['local']
+            # NOTE: Rename from localhost causes internal assertion. Tested: mongo server 2.0
+            full_cmd = 'c = rs.config(); c.members[%d].host = "%s"; rs.reconfig(c);' 
+            cmd = full_cmd % (member_index, new_name)
+            self.checkErr(self.eval(l, cmd))
+        self.mongoCommand(functor);
+
+    def eval(self, db, command):
+        c = db.connection
+        logging.debug("%s:%d - %s" % (c.host, c.port, command))
+        if self.dryrun:
+            return None
+        return db.eval(command)
+
+    def basicOperation(self, op, host_port):
+        def functor(c):
+            l = c['local']
+            err = self.eval(l, 'rs.%s("%s")' % (op, host_port))
+            self.checkErr(err)
+        return functor
+
+    def mongoCommand(self, functor):
+        if self.dryrun:
+            c = DryRunConnection(self.host, self.port)
+        else:
+            c = Connection(self.host_port)
+        try :
+            functor(c)
+        except AutoReconnect:
+            # some commands succeed, but trigger a disconnect of all client
+            # we're closing the connection anyway, so disregard
+            pass
+        finally:
+            c.close()
+
+    def checkErr(self, err):
+        if err:
+            msg = None
+            if 'assertion' in err:
+                msg = err['assertion']
+            elif 'errmsg' in err and 'ok' in err and 0 == err['ok']:
+                msg = err['errmsg']
+            logging.debug(err)
+            if msg:
+                raise MongoAdminException(msg)
+
+class MongoAdminRedhatOps(MongoRSAdmin):
+    def __init__(self, host, port, replSet, dryrun):
+        MongoRSAdmin.__init__(self, host, port, replSet, dryrun)
+        self.is_redhat = os.path.exists(REDHAT_CONFIG_FILE)
+        if self.is_redhat:
+            logging.debug("redhat detected")
+            self.cfg = REDHAT_CONFIG_FILE
+            self.user = 'mongodb'
+            self.group = 'mongodb'
+        else:
+            logging.debug("10gen installation detected")
+            self.cfg = TENGEN_CONFIG_FILE
+            self.user = 'mongod'
+            self.group = 'mongod'
+        ok, self.dbpath = commands.getstatusoutput('awk -F= \'/^dbpath *= */{print $2}\' "%s"' \
+             % self.cfg)
+        logging.debug("db path " + self.dbpath)
+        self.lockfile = self.dbpath + "/mongod.lock"
+        self.upCommand = '/sbin/service mongod start'
+        self.downCommand = '/sbin/service mongod stop'
+        self.arbUpCommand = '@SIPX_SERVICEDIR@/mongod-arbiter start'
+        self.arbDownCommand = '@SIPX_SERVICEDIR@/mongod-arbiter stop'
+
+    def requireRoot(self):
+        if os.geteuid() != 0:
+            raise MongoAdminException("Must be root")
+
+    def cmd_OBLITERATE(self):
+        self.requireRoot()
+        self.down()
+        self.clearLockFile()
+
+        # be very careful not to recursively delete '/'
+        if len(self.dbpath.strip()) > 0:
+            os_system('/bin/rm -f %s/{,_tmp,journal}/*.*' % self.dbpath)
+
+        if os_system('/bin/chown %s:%s %s' % (self.user, self,group, self.dbpath)) != 0:
+            logging.warn('Could not change ownership of database files in %s' % self.dbpath)
+
+        if os_system('/sbin/service mongod start') != 0:
+            raise MongoAdminException('Could not start mongo server')
+
+    def cmd_RESET_LOCAL_ARBITER(self):
+        self.requireRoot()
+        ok, self.dbpath = commands.getstatusoutput('awk -F= \'/^dbpath *= */{print $2}\' "%s"' \
+             % ARBITER_CONFIG_FILE)
+        self.upCommand = '@SIPX_SERVICEDIR@/mongod-arbiter start'
+        self.downCommand = '@SIPX_SERVICEDIR@/mongod-arbiter stop'
+        self.lockfile = self.dbpath + "/mongod.lock"
+        self.cmd_RESET_LOCAL_DATABASE()
+
+    def cmd_REPAIR(self):
+        self.requireRoot()
+        self.clearLockFile()
+        if os_system("/bin/su -- %s /usr/bin/mongod --repair" % self.user) != 0:
+            raise MongoAdminException("Could not repair database")
+
+    def os_system(self, os_command):
+        logging.debug(os_command)
+        if self.dryrun:
+            return 0
+        else:
+            return os_system(os_command)
+
+    def cmd_AUTO_REPAIR(self):
+        self.requireRoot()
+        if os.path.exists(self.lockfile):
+            pidf = open(self.lockfile)
+            pid = str(pidf.read()).strip()
+            if os.path.exists('/proc/' + pid):
+                self.cmd_REPAIR()
+                self.up()
+
+    def cmd_RESET_LOCAL_DATABASE(self):
+        self.requireRoot()
+        self.down()
+        if len(self.dbpath.strip()) > 0:
+            os_system('/bin/rm -f %s/local.*' % self.dbpath)
+        self.up()
+
+    def cmd_START_DATABASE(self):
+        self.up()
+
+    def cmd_START_ARBITER(self):
+        self.upArb()
+
+    def upArb(self):
+        if os_system(self.arbUpCommand) != 0:
+            raise MongoAdminException('Could not start mongo arbiter')
+
+    def downArb(self):
+        if os_system(self.arbDownCommand) != 0:
+            raise MongoAdminException('Could not start mongo arbiter')
+
+    def down(self):
+        if os_system(self.downCommand) != 0:
+          logging.debug('Could not stop mongod server, might be already down')
+
+    def up(self):
+        if os_system(self.upCommand) != 0:
+            raise MongoAdminException('Could not start mongo')
+        
+    def clearLockFile(self):
+        self.requireRoot()
+        if os.path.exists(self.lockfile):
+            os.remove(self.lockfile)
+
+if __name__ == '__main__':
+    c = None
+    # Parse arguments
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description='Mongo/sipXecs administration tools'
+        )
+
+    parser.formatter_class = argparse.ArgumentDefaultsHelpFormatter
+    parser.add_argument('--verbose', action="store_true", default=False,
+                help='verbose output')
+    parser.add_argument('--dryrun', action="store_true", default=False,
+                help='Do not actually execute any commands')
+    parser.add_argument('--host', metavar="name", default='localhost',
+                help='Mongo server host to run operations on')
+    parser.add_argument('--port', metavar="int", default=27017,
+                help='Mongo server port to run operations on')
+    parser.add_argument('--replSet', metavar="name", required=False,
+                help='Expected replset name for servers')
+    parser.add_argument("action", nargs=argparse.REMAINDER)
+    args = vars(parser.parse_args())
+
+    try:
+        level = None
+        if args['verbose']:
+            level = logging.DEBUG        
+        logging.basicConfig(
+            level=level,
+            format='.%(message)s'
+        )
+
+        admin = MongoAdminRedhatOps(args['host'], args['port'], args['replSet'], args['dryrun'])        
+        if len(args['action']) > 0:
+            admin.run(args['action'])
+        else:
+            actions = sys.stdin.readlines()
+            for action in actions:
+                action_args = action.rstrip().split()
+                admin.run(action_args)
+
+    except MongoAdminException as e:
+        sys.stderr.write(e.value)
+        sys.stderr.write('\n')
+        exit(1)
+
+    except :
+        sys.stderr.write(traceback.format_exc())
+        sys.stderr.write('\n')
+        exit(1)
+            
+    finally:
+        if c != None:
+            logging.debug('closing connection')
+            c.close()
