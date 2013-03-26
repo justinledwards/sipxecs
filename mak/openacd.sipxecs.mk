@@ -15,9 +15,6 @@ oacd = \
 
 lib += $(oacd)
 
-$(foreach P,$(oacd), \
-)
-
 openacd_VER = 2.0.0
 sipxopenacd_VER = $(PACKAGE_VERSION)
 $(foreach P,$(oacd_class_1), \
@@ -49,7 +46,7 @@ oacd_freeswitch_DEPS = $(call deps,openacd)
 openacd.dist: $(openacd_GIT_SUBMODULE)
 	cd $(SRC)/$(PROJ); \
 	  autoreconf -if; \
-	  ./configure; \
+	  ./configure --disable-dep-check; \
 	  make dist
 
 .SECONDEXPANSION:

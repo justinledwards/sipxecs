@@ -104,7 +104,6 @@ lib_all = \
   hiredis \
   net-snmp \
   homer \
-  OpenACD \
   openfire \
   erlmongo \
   erlang-ejrpc2 \
