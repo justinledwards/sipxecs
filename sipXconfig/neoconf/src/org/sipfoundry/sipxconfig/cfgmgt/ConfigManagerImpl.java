@@ -17,7 +17,10 @@
 package org.sipfoundry.sipxconfig.cfgmgt;
 
 import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.io.Serializable;
+import java.io.Writer;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -25,6 +28,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
 
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.sipfoundry.sipxconfig.address.Address;
@@ -36,6 +41,7 @@ import org.sipfoundry.sipxconfig.alarm.AlarmProvider;
 import org.sipfoundry.sipxconfig.alarm.AlarmServerManager;
 import org.sipfoundry.sipxconfig.common.LazyDaemon;
 import org.sipfoundry.sipxconfig.common.MongoGenerationFinishedEvent;
+import org.sipfoundry.sipxconfig.common.UserException;
 import org.sipfoundry.sipxconfig.commserver.Location;
 import org.sipfoundry.sipxconfig.commserver.LocationsManager;
 import org.sipfoundry.sipxconfig.commserver.SipxReplicationContext;
@@ -321,7 +327,7 @@ public class ConfigManagerImpl implements AddressProvider, ConfigManager, BeanFa
         protected boolean work() {
             ConfigRequest work = getWork();
             // check null, it's possible work has been done by the time we
-            // have gotten around to it 
+            // have gotten around to it
             if (work != null) {
                 doWork(work);
             }
@@ -384,6 +390,30 @@ public class ConfigManagerImpl implements AddressProvider, ConfigManager, BeanFa
         RunRequest collect = new RunRequest("upload snapshot", Collections.singleton(location));
         collect.setBundles("upload_snapshot");
         run(collect);
+    }
+
+    public void resetKeys(Collection<Location> locations) {
+        if (locations.size() == 0) {
+            return;
+        }
+        File resetKeysFile = new File(getCfDataDir() + "/1/reset_cfkey.cfdat");
+        Writer out = null;
+        try {
+            out = new FileWriter(resetKeysFile);
+            CfengineModuleConfiguration w = new CfengineModuleConfiguration(out);
+            @SuppressWarnings("unchecked")
+            Collection<String> ips = CollectionUtils.collect(locations, Location.GET_ADDRESS);
+            w.writeList("reset_cfkeys", ips);
+        } catch (IOException err) {
+            throw new UserException("Could not reset cfengine keys", err);
+        } finally {
+            IOUtils.closeQuietly(out);
+        }
+        Location primary = getLocationManager().getPrimaryLocation();
+        RunRequest reset = new RunRequest("reset cfengine keys", Collections.singleton(primary));
+        reset.setBundles("reset_cfkey");
+        run(reset);
+        resetKeysFile.delete();
     }
 
     @Override
