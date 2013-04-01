@@ -327,7 +327,7 @@ public class ConfigManagerImpl implements AddressProvider, ConfigManager, BeanFa
         protected boolean work() {
             ConfigRequest work = getWork();
             // check null, it's possible work has been done by the time we
-            // have gotten around to it 
+            // have gotten around to it
             if (work != null) {
                 doWork(work);
             }
@@ -409,6 +409,30 @@ public class ConfigManagerImpl implements AddressProvider, ConfigManager, BeanFa
         } finally {
             IOUtils.closeQuietly(out);
         }        
+        Location primary = getLocationManager().getPrimaryLocation();
+        RunRequest reset = new RunRequest("reset cfengine keys", Collections.singleton(primary));
+        reset.setBundles("reset_cfkey");
+        run(reset);
+        resetKeysFile.delete();
+    }
+
+    public void resetKeys(Collection<Location> locations) {
+        if (locations.size() == 0) {
+            return;
+        }
+        File resetKeysFile = new File(getCfDataDir() + "/1/reset_cfkey.cfdat");
+        Writer out = null;
+        try {
+            out = new FileWriter(resetKeysFile);
+            CfengineModuleConfiguration w = new CfengineModuleConfiguration(out);
+            @SuppressWarnings("unchecked")
+            Collection<String> ips = CollectionUtils.collect(locations, Location.GET_ADDRESS);
+            w.writeList("reset_cfkeys", ips);
+        } catch (IOException err) {
+            throw new UserException("Could not reset cfengine keys", err);
+        } finally {
+            IOUtils.closeQuietly(out);
+        }
         Location primary = getLocationManager().getPrimaryLocation();
         RunRequest reset = new RunRequest("reset cfengine keys", Collections.singleton(primary));
         reset.setBundles("reset_cfkey");
