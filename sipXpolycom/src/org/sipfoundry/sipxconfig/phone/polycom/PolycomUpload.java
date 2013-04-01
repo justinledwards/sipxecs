@@ -93,6 +93,19 @@ public class PolycomUpload extends Upload {
     public void undeploy() {
         super.setDestinationDirectory(getDestinationDirectory() + POLYCOM_DIR + getSettingValue(VERSION));
         super.undeploy();
+        File spipLoc = new File(getDestinationDirectory() + "/SoundPointIPLocalization");
+        try {
+            if (spipLoc.exists()) {
+                FileUtils.deleteDirectory(spipLoc);
+            }
+            File config = new File(getDestinationDirectory() + "/Config");
+            if (config.exists()) {
+                FileUtils.deleteDirectory(config);
+            }
+        } catch (IOException e) {
+            LOG.error("IOException while deleting folder.", e);
+        }
+
     }
 
     @Override
