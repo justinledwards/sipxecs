@@ -416,54 +416,6 @@ public class ConfigManagerImpl implements AddressProvider, ConfigManager, BeanFa
         resetKeysFile.delete();
     }
 
-    public void resetKeys(Collection<Location> locations) {
-        if (locations.size() == 0) {
-            return;
-        }
-        File resetKeysFile = new File(getCfDataDir() + "/1/reset_cfkey.cfdat");
-        Writer out = null;
-        try {
-            out = new FileWriter(resetKeysFile);
-            CfengineModuleConfiguration w = new CfengineModuleConfiguration(out);
-            @SuppressWarnings("unchecked")
-            Collection<String> ips = CollectionUtils.collect(locations, Location.GET_ADDRESS);
-            w.writeList("reset_cfkeys", ips);
-        } catch (IOException err) {
-            throw new UserException("Could not reset cfengine keys", err);
-        } finally {
-            IOUtils.closeQuietly(out);
-        }
-        Location primary = getLocationManager().getPrimaryLocation();
-        RunRequest reset = new RunRequest("reset cfengine keys", Collections.singleton(primary));
-        reset.setBundles("reset_cfkey");
-        run(reset);
-        resetKeysFile.delete();
-    }
-
-    public void resetKeys(Collection<Location> locations) {
-        if (locations.size() == 0) {
-            return;
-        }
-        File resetKeysFile = new File(getCfDataDir() + "/1/reset_cfkey.cfdat");
-        Writer out = null;
-        try {
-            out = new FileWriter(resetKeysFile);
-            CfengineModuleConfiguration w = new CfengineModuleConfiguration(out);
-            @SuppressWarnings("unchecked")
-            Collection<String> ips = CollectionUtils.collect(locations, Location.GET_ADDRESS);
-            w.writeList("reset_cfkeys", ips);
-        } catch (IOException err) {
-            throw new UserException("Could not reset cfengine keys", err);
-        } finally {
-            IOUtils.closeQuietly(out);
-        }
-        Location primary = getLocationManager().getPrimaryLocation();
-        RunRequest reset = new RunRequest("reset cfengine keys", Collections.singleton(primary));
-        reset.setBundles("reset_cfkey");
-        run(reset);
-        resetKeysFile.delete();
-    }
-
     @Override
     public ConfigCommands getConfigCommands() {
         return this;
