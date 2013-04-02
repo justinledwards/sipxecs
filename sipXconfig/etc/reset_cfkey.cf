@@ -20,11 +20,11 @@ bundle agent reset_cfkey {
 
 bundle agent reset_cfkey_do {  
   vars:
-    reset_file => "$(sipx.SIPX_CFDATA)/$(sipx.location_id)/reset_cfkey.cfdat";
+    "reset_file" string => "$(sipx.SIPX_CFDATA)/$(sipx.location_id)/reset_cfkey.cfdat";
 
   classes:
     "have_reset_file" expression => fileexists("$(reset_file)");
-    "have_keys_to_reset" expression => isvariable("sipx.reset_cfkey");
+    "have_keys_to_reset" expression => isvariable("sipx.reset_cfkeys");
 
   files:
     have_reset_file::
@@ -35,10 +35,10 @@ bundle agent reset_cfkey_do {
     have_keys_to_reset::
       "/usr/sbin/cf-key"
         comment => "Deleting cfkey for root user",
-        args => "-r $(sipx.reset_cfkey)";
+        args => "-r $(sipx.reset_cfkeys)";
 
       "/usr/sbin/cf-key"
         comment => "Deleting cfkey for $(sipx.user) user",
-        args => "-r $(sipx.reset_cfkey)",
+        args => "-r $(sipx.reset_cfkeys)",
         contain => su("$(sipx.SIPXPBXUSER)");
 }
