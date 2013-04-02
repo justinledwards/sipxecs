@@ -391,7 +391,7 @@ public class ConfigManagerImpl implements AddressProvider, ConfigManager, BeanFa
         collect.setBundles("upload_snapshot");
         run(collect);
     }
-    
+
     public void resetKeys(Collection<Location> locations) {
         if (locations.size() == 0) {
             return;
@@ -405,15 +405,15 @@ public class ConfigManagerImpl implements AddressProvider, ConfigManager, BeanFa
             Collection<String> ips = CollectionUtils.collect(locations, Location.GET_ADDRESS);
             w.writeList("reset_cfkeys", ips);
         } catch (IOException err) {
-            throw new UserException("Could not reset cfengine keys", err);            
+            throw new UserException("Could not reset cfengine keys", err);
         } finally {
             IOUtils.closeQuietly(out);
-        }        
+        }
         Location primary = getLocationManager().getPrimaryLocation();
         RunRequest reset = new RunRequest("reset cfengine keys", Collections.singleton(primary));
         reset.setBundles("reset_cfkey");
         run(reset);
-        resetKeysFile.delete();
+        // cfengine promise should delete file as this job is asynchronous
     }
 
     @Override
