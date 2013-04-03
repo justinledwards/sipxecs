@@ -226,7 +226,7 @@ public class SnomTest extends TestCase {
     public void testSnomContextEmpty() {
         SnomPhone phone = new SnomPhone();
 
-        SnomProfileContext sc = new SnomProfileContext(phone, null, m_emptyPhonebook, null);
+        SnomProfileContext sc = new SnomProfileContext(phone, null, m_emptyPhonebook, null, null);
         String[] numbers = (String[]) sc.getContext().get("speedDial");
 
         assertEquals(0, numbers.length);
@@ -238,14 +238,14 @@ public class SnomTest extends TestCase {
 
         SnomPhone phone = new SnomPhone();
 
-        SnomProfileContext sc = new SnomProfileContext(phone, smallSd, m_emptyPhonebook, null);
+        SnomProfileContext sc = new SnomProfileContext(phone, smallSd, m_emptyPhonebook, null, null);
         String[] numbers = (String[]) sc.getContext().get("speedDial");
         assertEquals(5, numbers.length);
         for (int i = 0; i < numbers.length; i++) {
             assertEquals(Integer.toString(i), numbers[i]);
         }
 
-        sc = new SnomProfileContext(phone, largeSd, m_emptyPhonebook, null);
+        sc = new SnomProfileContext(phone, largeSd, m_emptyPhonebook, null, null);
         numbers = (String[]) sc.getContext().get("speedDial");
         assertEquals(33, numbers.length);
         for (int i = 0; i < numbers.length; i++) {
@@ -260,7 +260,7 @@ public class SnomTest extends TestCase {
         }
         SnomPhone phone = new SnomPhone();
 
-        SnomProfileContext sc = new SnomProfileContext(phone, null, phonebook, null);
+        SnomProfileContext sc = new SnomProfileContext(phone, null, phonebook, null, null);
         Collection< ? > trimmed = (Collection< ? >) sc.getContext().get("phoneBook");
         assertEquals(100, trimmed.size());
     }

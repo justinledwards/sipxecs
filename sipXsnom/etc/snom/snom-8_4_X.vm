@@ -82,17 +82,17 @@ perm="R"#end
 	</functionKeys>
 	<!-- Retrieving tftp server to provision web-language and language -->
 #set ($ip = $phone.PhoneContext.PhoneDefaults.TftpServer)
-
+     
         <web-languages>
 #foreach ($file in $webLang)
-		<language url="http://$ip:8090/phone/profile/docroot/snomlang/$file.Version/$file.FileName" name="${file.LangCode}"/>
+		<language url="http://$ip:8090/phone/profile/docroot/snomlang/8_4_X/$file.FileName" name="${file.LangCode}"/>
 #end
-        </web-languages>
+	</web-languages>
 
         <!-- Snom Language -->
         <gui-languages>
 #foreach ($file in $guiLang)
-		<language url="http://$ip:8090/phone/profile/docroot/snomlang/$file.Version/$file.FileName" name="${file.LangCode}"/>
+		<language url="http://$ip:8090/phone/profile/docroot/snomlang/8_4_X/$file.FileName" name="${file.LangCode}"/>
 #end
         </gui-languages>
 
