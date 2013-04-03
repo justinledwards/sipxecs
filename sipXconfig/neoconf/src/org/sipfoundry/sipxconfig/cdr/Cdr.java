@@ -123,6 +123,9 @@ public class Cdr implements Serializable {
     public void setCalleeContact(String calleeContact) {
         m_calleeContact = calleeContact;
         m_recipient = SipUri.extractUser(calleeContact);
+        if (m_privacy) {
+            m_recipient = maskAor(m_recipient);
+        }
     }
 
     public String getCallerAor() {
