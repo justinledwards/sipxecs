@@ -11,6 +11,9 @@ package org.sipfoundry.sipxconfig.site.cdr;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.Date;
+import java.util.Calendar;
+import java.text.SimpleDateFormat;
 
 import org.apache.tapestry.BaseComponent;
 import org.apache.tapestry.IAsset;
@@ -21,6 +24,8 @@ import org.apache.tapestry.annotations.InjectState;
 import org.apache.tapestry.annotations.Parameter;
 import org.apache.tapestry.contrib.table.model.ITableColumn;
 import org.apache.tapestry.services.ExpressionEvaluator;
+import org.sipfoundry.sipxconfig.feature.FeatureManager;
+import org.sipfoundry.sipxconfig.feature.LocationFeature;
 import org.sipfoundry.sipxconfig.cdr.Cdr;
 import org.sipfoundry.sipxconfig.common.CoreContext;
 import org.sipfoundry.sipxconfig.common.SipUri;
@@ -43,11 +48,17 @@ public abstract class CdrTable extends BaseComponent {
     private static final Pattern AOR_RE = Pattern.compile(AOR);
     private static final Pattern FULL_USER_RE = Pattern.compile("(?:\\w+ *)+ - (\\d+)");
 
+    private static final String HOMER_LINK = "/webhomer/index.php?component=search&"
+            + "task=result&callid=%s&location[]=1&from_date=%s&to_date=%s";
+
     @InjectObject(value = "service:tapestry.ognl.ExpressionEvaluator")
     public abstract ExpressionEvaluator getExpressionEvaluator();
 
     @Parameter
     public abstract Object getSource();
+
+    @Parameter(defaultValue = "true")
+    public abstract boolean isShowHomer();
 
     public abstract Cdr getRow();
 
@@ -64,6 +75,9 @@ public abstract class CdrTable extends BaseComponent {
 
     @InjectObject(value = "spring:coreContext")
     public abstract CoreContext getCoreContext();
+
+    @InjectObject(value = "spring:featureManager")
+    public abstract FeatureManager getFeatureManager();
 
     @InjectState(value = "userSession")
     public abstract UserSession getUserSession();
@@ -107,6 +121,9 @@ public abstract class CdrTable extends BaseComponent {
     @Asset("/images/retrievepark.png")
     public abstract IAsset getRetrieveParkIcon();
 
+    @Asset("/images/go.png")
+    public abstract IAsset getLink();
+
     /**
      * Implements click to call link
      *
@@ -127,6 +144,11 @@ public abstract class CdrTable extends BaseComponent {
 
     public User getUser() {
         return getUserSession().getUser(getCoreContext());
+    }
+
+    public boolean isHomerEnabled() {
+        LocationFeature feature = new LocationFeature("homer_web");
+        return getFeatureManager().isFeatureEnabled(feature) && isShowHomer() && getUserSession().isAdmin();
     }
 
     public IAsset getRecipientTypeIcon() {
@@ -222,5 +244,22 @@ public abstract class CdrTable extends BaseComponent {
             return true;
         }
         return false;
+    }
+
+    public String getHomerLink() {
+        String callid = getRow().getCallId();
+        SimpleDateFormat ft = new SimpleDateFormat("dd-MM-yyyy");
+        Date start = getRow().getStartTime();
+        Date end = getRow().getEndTime();
+        if (end == null) {
+            end = new Date();
+        }
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(end);
+        cal.add(Calendar.DATE, 1);
+        end = cal.getTime();
+        return String.format(HOMER_LINK, callid,
+                             ft.format(start),
+                             ft.format(end));
     }
 }
