@@ -1,0 +1,20 @@
+COMMAND:RESET_LOCAL
+OS:/sbin/service mongod stop
+OS:/bin/rm -f /var/lib/mongodb/local.*
+OS:/sbin/service mongod start
+COMMAND:OBLITERATE
+OS:/sbin/service mongod stop
+OS:/bin/rm -f /var/lib/mongodb/{,_tmp,journal}/*.*
+OS:/bin/chown mongodb:mongodb /var/lib/mongodb
+OS:/sbin/service mongod start
+COMMAND:REPAIR
+OS:/bin/su -- mongodb /usr/bin/mongod --repair
+COMMAND:RENAME swift.huber.us:27018 new_name:27018
+RS:c = rs.config(); c.members[9999].host = "new_name:27018"; rs.reconfig(c);
+COMMAND:INITIALIZE
+RS:rs.config()
+RS:rs.initiate({"_id" : "sipxecs", "version" : 1, "members" : [{ "_id" : 0, "host" : "swift.hubler.us:27017"}]})
+COMMAND:ADD swift.hubler.us:27018
+RS:rs.addArb("swift.hubler.us:27018")
+COMMAND:ADD swift.hubler.us:27019
+RS:rs.add("swift.hubler.us:27019")

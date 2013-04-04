@@ -1,3 +1,11 @@
+{"model" : {
+  "replSet" : "sipxecs",
+  "servers" : [
+    "swift.hubler.us:27017",
+    "swift.hubler.us:27019"
+  ]
+},
+"meta":
 {
     "swift.hubler.us:27019": {
         "available": true,
@@ -67,4 +75,5 @@
         },
         "server": "swift.hubler.us:27017"
     }
+}
 }

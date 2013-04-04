@@ -49,34 +49,28 @@ import datetime
 analyzers = []
 
 class CheckReplSet:
-    def __init__(self, replSet):
-        self.replSet = replSet
-
     def analyze(self, meta): 
-        for host, host_meta in meta.meta.items():
+        for host, host_meta in meta.meta['meta'].items():
             if 'status' in host_meta and 'set' in host_meta['status']:
-                if host_meta['status']['set'] != self.replSet:
-                    meta.server_states[host].append('BAD_REPLSET_' + host_meta['type'])
+                if host_meta['status']['set'] != meta['model']['replSet']:
+                    meta.states[host].append('BAD_REPLSET')
                 elif 'config' in host_meta and '_id' in host_meta['config']:
-                    if host_meta['config']['_id'] != self.replSet:
-                        meta.server_states[host].append('BAD_REPLSET_' + host_meta['type'])
+                    if host_meta['config']['_id'] != meta['model']['replSet']:
+                        meta.states[host].append('BAD_REPLSET')
+
+analyzers.append(CheckReplSet())
 
 class CheckHostnameOrMissingConfig:
     def analyze(self, meta):        
-        for host, host_meta in meta.meta.items():
+        for host, host_meta in meta.meta['meta'].items():
             status, config = meta.member(host)
             if not host_meta['available']:
-                if host_meta['type'] == 'ARBITER':
-                    meta.server_states[host].append('UNAVAILABLE_ARBITER')
-                else:
-                    meta.server_states[host].append('UNAVAILABLE_DATABASE')                
+                logging.debug(host_meta)
+                meta.states[host].append('UNAVAILABLE')
             elif config == None:
-                if host_meta['type'] == 'ARBITER':
-                    meta.server_states[host].append('MISSING_ARBITER')
-                else:
-                    meta.server_states[host].append('MISSING_DATABASE')
+                meta.states[host].append('MISSING')
             elif 'host' in config and config['host'] != host:
-                meta.server_states[host].append('HOSTNAME_MISMATCH')
+                meta.states[host].append('HOSTNAME_MISMATCH')
 
 analyzers.append(CheckHostnameOrMissingConfig())
 
@@ -90,21 +84,43 @@ class CheckPrimaries:
             meta.cluster_states.append('NO_PRIMARY')
         if len(primaries) > 1:
             meta.cluster_states.append('MULTIPLE_PRIMARIES')
-        for primary in primaries:
-            meta.server_states[primary].append('PRIMARY')
 
 analyzers.append(CheckPrimaries())
+
+class CheckRole:
+    def analyze(self, meta):        
+        for host, host_meta in meta.meta['meta'].items():
+           status, config = meta.member(host)
+           stype = meta.nodeType(host)
+           if stype == 'arbiters':
+               meta.states[host].append('ARBITER')
+           else:
+               if status and status['stateStr'] == 'PRIMARY':
+                   meta.states[host].append('PRIMARY')
+               else:
+                   meta.states[host].append('SECONDARY')
+
+analyzers.append(CheckRole())
+
 
 class MongoMeta:
     def __init__(self, meta):
         self.meta = meta
         self.cluster_states = []
-        self.server_states = {}
-        for host in meta.keys():
-            self.server_states[host] = []
+        self.states = {}
+        for host in meta['meta'].keys():
+            self.states[host] = []
 
     def __getitem__(self, host):
         return self.meta[host]
+
+    def nodeType(self, host_port):
+        for stype in ['servers', 'arbiters']:
+            if stype in self.meta['model']:
+                if host_port in self.meta['model'][stype]:
+                    return stype
+        # should throw error
+        raise Exception('Could not find host' + host_port)
 
     def statusMembers(self, predicate):        
         return self._configOrStatus(predicate, 'status')
@@ -122,7 +138,7 @@ class MongoMeta:
         return None, None
 
     def _configOrStatus(self, predicate, config_or_status):
-        for host, meta in self.meta.items():
+        for host, meta in self.meta['meta'].items():
             if config_or_status in meta:
                 if meta[config_or_status] and 'members' in meta[config_or_status]:
                     for member in meta[config_or_status]['members']:
@@ -131,35 +147,23 @@ class MongoMeta:
         return
 
 class MongoAdmin:
-    def __init__(self, servers, arbiters):
-        # ensure unicode because host names will be unicode if reading a dump
-        if servers:
-            self.servers = [unicode(s) for s in servers]
-        else:
-            self.servers = []
-        if arbiters:
-            self.arbiters = [unicode(s) for s in arbiters]
-        else:
-            self.arbiters = []
-
-    def dump(self):
-        meta = self.loadMeta()
+    def dump(self, model_file):
+        meta = self.loadMeta(model_file)
         sys.stdout.write(json.dumps(meta, cls=MongoJSONEncoder, indent=4, separators=(',', ': ')))
 
     def parse(self):
         meta = json.load(sys.stdin)
         self.statusFromMeta(meta)
 
-    def status(self):
-        self.statusFromMeta(self.loadMeta())
+    def status(self, model_file):
+        self.statusFromMeta(self.loadMeta(model_file))
 
     def statusFromMeta(self, m):
         meta = MongoMeta(m)
         for analyzer in analyzers:
             analyzer.analyze(meta)
-        sys.stdout.write(json.dumps(meta.cluster_states, cls=MongoJSONEncoder))
-        print
-        sys.stdout.write(json.dumps(meta.server_states, cls=MongoJSONEncoder))
+        out = {"model": meta.meta['model'], "cluster": meta.cluster_states, "states": meta.states}
+        sys.stdout.write(json.dumps(out, cls=MongoJSONEncoder, indent=4, separators=(',', ': ')))
         print
 
     def eval(self, db, command):
@@ -190,16 +194,17 @@ class MongoAdmin:
 
         return m
     
-    def loadMeta(self):
-        meta = {}
-        for h in self.servers:
-            m = self.loadMetaForHost(h)
-            m['type'] = 'DATABASE'
-            meta[h] = m
-        for h in self.arbiters:
-            m = self.loadMetaForHost(h)
-            m['type'] = 'ARBITER'
-            meta[h] = m
+    def loadMeta(self, model_file):
+        if not model_file:
+            raise Exception("'--model' parameter is required for this operation")
+        model = json.load(open(model_file))
+        status = {}
+        for stype in ['servers', 'arbiters']:
+            if stype in model:
+                for h in model[stype]:
+                    m = self.loadMetaForHost(h)
+                    status[h] = m
+        meta = {'model' : model, 'meta': status}
         return meta
 
 class MongoJSONEncoder(json.JSONEncoder):
@@ -219,18 +224,14 @@ if __name__ == '__main__':
         description='Mongo/sipXecs administration tools'
         )
     parser.formatter_class = argparse.ArgumentDefaultsHelpFormatter
-    parser.add_argument('--servers',  metavar='host[:port]', nargs='+', required=False, default=[],
-                help='server[:port] to connect to')
-    parser.add_argument('--arbiters',  metavar='host[:port]', nargs='+', required=False, default=[],
-                help='server[:port] to connect to')
     parser.add_argument('--dump', action="store_true", default=False,
                 help='Dump the cluster data to JSON format to stdout before any analysis has been done')
     parser.add_argument('--parse', action="store_true", default=False,
                 help='Read the dump from stdin from a cluster and then analyze status')
     parser.add_argument('--verbose', action="store_true", default=False,
                 help='verbose output')
-    parser.add_argument('--replSet', metavar="name", required=True,
-                help='Expected replset name for servers')
+    parser.add_argument('--model', metavar="file name", required=False,
+                help='JSON Model file of cluster server configuration. Required for all but --parse option')
     args = vars(parser.parse_args())
 
     try:
@@ -242,14 +243,13 @@ if __name__ == '__main__':
             format='.%(message)s'
         )
 
-        admin = MongoAdmin(args['servers'], args['arbiters'])
-        analyzers.append(CheckReplSet(args['replSet']))
-        if args['dump']:
-            admin.dump()
-        elif args['parse']:
+        admin = MongoAdmin()
+        if args['parse']:
             admin.parse()
+        elif args['dump']:
+            admin.dump(args['model'])
         else:
-            admin.status()
+            admin.status(args['model'])
 
     except :
         sys.stderr.write(traceback.format_exc())

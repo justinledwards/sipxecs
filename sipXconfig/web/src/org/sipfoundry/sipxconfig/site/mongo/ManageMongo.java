@@ -17,10 +17,11 @@
 package org.sipfoundry.sipxconfig.site.mongo;
 
 
+import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.Map;
+import java.util.List;
 
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.tapestry.IAsset;
 import org.apache.tapestry.IRequestCycle;
@@ -32,17 +33,17 @@ import org.apache.tapestry.components.IPrimaryKeyConverter;
 import org.apache.tapestry.event.PageBeginRenderListener;
 import org.apache.tapestry.event.PageEvent;
 import org.sipfoundry.sipxconfig.common.UserException;
+import org.sipfoundry.sipxconfig.commserver.Location;
 import org.sipfoundry.sipxconfig.commserver.LocationsManager;
 import org.sipfoundry.sipxconfig.components.PageWithCallback;
 import org.sipfoundry.sipxconfig.components.SelectMap;
 import org.sipfoundry.sipxconfig.components.SipxValidationDelegate;
 import org.sipfoundry.sipxconfig.feature.FeatureManager;
 import org.sipfoundry.sipxconfig.mongo.MongoAction;
-import org.sipfoundry.sipxconfig.mongo.MongoActionModel;
+import org.sipfoundry.sipxconfig.mongo.MongoAdmin;
 import org.sipfoundry.sipxconfig.mongo.MongoManager;
-import org.sipfoundry.sipxconfig.mongo.MongoReplicaSetManager;
+import org.sipfoundry.sipxconfig.mongo.MongoNode;
 import org.sipfoundry.sipxconfig.mongo.MongoReplicaSetManager2;
-import org.sipfoundry.sipxconfig.mongo.MongoService;
 
 public abstract class ManageMongo extends PageWithCallback implements PageBeginRenderListener {
     public static final String PAGE = "mongo/ManageMongo";
@@ -59,21 +60,20 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
     @InjectObject("spring:mongoManager")
     public abstract MongoManager getMongoManager();
 
-    @InjectObject("spring:mongoReplicaSetManager")
-    public abstract MongoReplicaSetManager getMongoReplicaSetManager();
+    public abstract void setAdmin(MongoAdmin admin);
+
+    public abstract MongoAdmin getAdmin();
 
     @InjectObject("spring:mongoReplicaSetManager2")
     public abstract MongoReplicaSetManager2 getMongoReplicaSetManager2();
 
-    public abstract void setMongos(Map<String, MongoService> mongos);
+    public abstract MongoNode getNode();
 
-    public abstract Map<String, MongoService> getMongos();
+    public abstract String getStatus();
 
-    public abstract MongoService getMongo();
+    public abstract String getAction();
 
-    public abstract MongoActionModel getActionModel();
-
-    public abstract void setActionModel(MongoActionModel model);
+    public abstract String getMongoAction();
 
     @Bean
     public abstract SelectMap getSelections();
@@ -113,9 +113,9 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
 
     public abstract String getCurrentServerName();
 
-    public Collection<String> getServerNames() {
-        return getActionModel().getAvailableServerIds();
-    }
+    public abstract void setNodes(List<MongoNode> status);
+
+    public abstract void setServerNames(Collection<String> names);
 
     public boolean isServerNameSelected() {
         // effectively clears form every refresh
@@ -130,11 +130,25 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
 
     public void onSpecificServerAction(IRequestCycle cycle) {
         Object[] params = cycle.getListenerParameters();
-        MongoAction action = MongoAction.valueOf(params[0].toString());
-        String serverId = params[1].toString();
-        getMongoReplicaSetManager2().takeAction(action, serverId);
-        getValidator().recordSuccess(action + " on " + serverId + " complete.");
+        String serverId = params[0].toString();
+        String action = params[1].toString();
+        String response = getAdmin().takeAction(serverId, action);
+        String msg;
+        if (response == null) {
+            msg = "operation working on the background";
+        } else {
+            msg = action + " on " + serverId + " complete.";
+        }
+        getValidator().recordSuccess(msg);
         initializePage();
+    }
+
+    public String getLocalizedAction() {
+        return getAction();
+    }
+
+    public String getLocalizedStatus() {
+        return getStatus();
     }
 
     @InitialValue(value = "literal:")
@@ -144,8 +158,8 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
 
     public abstract String getCurrentServerAction();
 
-    public Collection<MongoAction> getServerActions() {
-        return getActionModel().getAvailableServerActions();
+    public Collection<String> getServerActions() {
+        return Arrays.asList(new String[] {"add arbiter", "add database"});
     }
 
     public boolean isServerActionSelected() {
@@ -160,65 +174,40 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
     }
 
     public IAsset getStatusAsset() {
-        switch (getMongo().getState()) {
-        case PRIMARY:
-        case ARBITER:
-            return getRunningIcon();
-        case UNKNOWN:
-            return getUnknownIcon();
-        case STARTUP1:
-            return getUnconfiguredIcon();
-        case STARTUP2:
-            return getLoadingIcon();
-        case UNAVAILABLE:
-            return getStoppedIcon();
-        default:
-            return getErrorIcon();
+        for (String s : getNode().getStatus()) {
+            if (s.equals("PRIMARY") || s.equals("SECONDARY") || s.equals("ARBITER")) {
+                return getRunningIcon();
+            }
+            if (s.equals("UNAVAILABLE")) {
+                return getStoppedIcon();
+            }
         }
-    }
 
-    @InitialValue(value = "literal:")
-    public abstract String getSpecificServerAction();
-
-    public abstract void setSpecificServerAction(String action);
-
-    public abstract String getCurrentSpecificServerAction();
-
-    public Collection<MongoAction> getSpecificServerActions() {
-        MongoService service = getMongo();
-        Collection<MongoAction> none = Collections.emptyList();
-        return service == null ? none : getActionModel().getAvailableServerActions(service.getServerId());
-    }
-
-    public boolean isSpecificServerActionSelected() {
-        // effectively clears form every refresh
-        return false;
-    }
-
-    public void setSpecificServerActionSelected(boolean yes) {
-        if (yes) {
-            setSpecificServerAction(getCurrentSpecificServerAction());
-        }
+        return getUnknownIcon();
+        // case STARTUP1:
+        // return getUnconfiguredIcon();
+        // case STARTUP2:
+        // return getLoadingIcon();
+        // case UNAVAILABLE:
+        // return getStoppedIcon();
+        // default:
+        // return getErrorIcon();
+        // }
     }
 
     @Override
     public void pageBeginRender(PageEvent arg0) {
-        if (getMongos() == null) {
+        if (getAdmin() == null) {
             initializePage();
         }
     }
 
     void initializePage() {
-        Map<String, MongoService> mongos = getMongos();
-        mongos = getMongoReplicaSetManager2().getMongoServices();
-        setMongos(mongos);
-        MongoActionModel actionModel = getMongoReplicaSetManager2().getActionModel(mongos);
-        setActionModel(actionModel);
-
-        UserException lastErr = getMongoReplicaSetManager2().getLastError();
-        if (lastErr != null) {
-            getValidator().record(lastErr, getMessages());
-        }
+        setAdmin(getMongoReplicaSetManager2().getMongoAdmin());
+        List<Location> l = getLocationsManager().getLocationsList();
+        @SuppressWarnings("unchecked")
+        Collection<String> names = CollectionUtils.collect(l, Location.GET_HOSTNAME);
+        setServerNames(names);
     }
 
     public void refresh() {
@@ -227,7 +216,6 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
 
     public void takeAction() {
         String serverAction = getServerAction();
-        String specificServerAction = getSpecificServerAction();
         if (StringUtils.isNotBlank(serverAction)) {
             String server = getServerName();
             if (StringUtils.isBlank(server)) {
@@ -236,45 +224,6 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
             MongoAction action = MongoAction.valueOf(serverAction);
             getMongoReplicaSetManager2().takeAction(action, server);
             getValidator().recordSuccess("congrats, you pressed " + serverAction + " for " + server);
-        } else if (StringUtils.isNotBlank(specificServerAction)) {
-            String specificServer = getCurrentServerName();
-            MongoAction action = MongoAction.valueOf(specificServerAction);
-            getMongoReplicaSetManager2().takeAction(action, specificServer);
-            getValidator().recordSuccess(
-                    "congrats, you pressed specific action " + specificServerAction + " for server "
-                            + specificServer);
-        }
-    }
-
-    public void addInReplicaSet(String name) {
-        try {
-            getMongoReplicaSetManager().addInReplicaSet(name);
-        } catch (Exception ex) {
-            getValidator().record(new UserException(ex.getMessage()), getMessages());
-        }
-    }
-
-    public void removeFromReplicaSet(String name) {
-        try {
-            getMongoReplicaSetManager().removeFromReplicaSet(name);
-        } catch (Exception ex) {
-            getValidator().record(new UserException(ex.getMessage()), getMessages());
-        }
-    }
-
-    public void stepDown() {
-        try {
-            getMongoReplicaSetManager().stepDown();
-        } catch (Exception ex) {
-            getValidator().record(new UserException(ex.getMessage()), getMessages());
-        }
-    }
-
-    public void forceReconfig() {
-        try {
-            getMongoReplicaSetManager().forceReconfig();
-        } catch (Exception ex) {
-            getValidator().record(new UserException(ex.getMessage()), getMessages());
         }
     }
 
@@ -283,23 +232,22 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
 
             @Override
             public Object getValue(Object arg0) {
-                if (arg0 instanceof MongoService) {
+                if (arg0 instanceof MongoNode) {
                     return arg0;
                 } else if (arg0 instanceof String) {
-                    return getMongos().get((String) arg0);
+                    return getAdmin().getNode((String) arg0);
                 }
                 return null;
             }
 
             @Override
             public Object getPrimaryKey(Object arg0) {
-                if (arg0 instanceof MongoService) {
-                    MongoService mongo = (MongoService) arg0;
-                    return mongo.getServerId();
+                if (arg0 instanceof MongoNode) {
+                    MongoNode mongo = (MongoNode) arg0;
+                    return mongo.getId();
                 }
                 return null;
             }
         };
     }
-
 }

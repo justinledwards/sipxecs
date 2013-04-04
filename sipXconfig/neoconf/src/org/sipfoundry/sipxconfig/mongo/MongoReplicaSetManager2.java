@@ -63,6 +63,10 @@ public class MongoReplicaSetManager2 implements BeanFactoryAware {
         return m_configManager;
     }
 
+    public MongoAdmin getMongoAdmin() {
+        return (MongoAdmin) m_beanFactory.getBean("mongoAdmin");
+    }
+
     public MongoActionModel getActionModel(Map<String, MongoService> services) {
         MongoActionModel model = (MongoActionModel) m_beanFactory.getBean("mongoActionModel");
         model.setMongos(services);

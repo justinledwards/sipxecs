@@ -1,14 +1,12 @@
 {
-    "states": {
+    "available": {
         "swift.hubler.us:27018": [
-            "MISSING",
-            "ARBITER"
+            "RESTART"
         ],
         "swift.hubler.us:27017": [
-            "PRIMARY"
+            "RESTART"
         ]
     },
-    "cluster": [],
     "model": {
         "arbiters": [
             "swift.hubler.us:27018"
@@ -16,6 +14,11 @@
         "replSet": "sipxecs",
         "servers": [
             "swift.hubler.us:27017"
+        ]
+    },
+    "required": {
+        "swift.hubler.us:27017": [
+            "ADD swift.hubler.us:27018"
         ]
     }
 }

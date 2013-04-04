@@ -46,6 +46,12 @@ bundle agent mongodb {
     mongod_arbiter::
       "any" usebundle => mongodb_arbiter_config;
 
+    mongod|mongod_arbiter::
+      "any" usebundle => allow_ssh_command("mongodb-admin");
+
+    !(mongod|mongod_arbiter)::
+      "any" usebundle => disallow_ssh_command("mongodb-admin");
+
     fedora16_or_greater.mongodb_redhat::
       "any" usebundle => mongodb_systemctl_running;
 

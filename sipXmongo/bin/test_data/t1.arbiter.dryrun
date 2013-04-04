@@ -1,0 +1,16 @@
+COMMAND:RESET_LOCAL
+OS:@SIPX_SERVICEDIR@/mongod-arbiter stop
+OS:/bin/rm -f /var/lib/mongodb-arbiter/local.*
+OS:@SIPX_SERVICEDIR@/mongod-arbiter start
+COMMAND:OBLITERATE
+OS:@SIPX_SERVICEDIR@/mongod-arbiter stop
+OS:rm -f /var/lib/mongodb-arbiter/mongod.lock
+OS:/bin/rm -f /var/lib/mongodb-arbiter/{,_tmp,journal}/*.*
+OS:/bin/chown mongodb:mongodb /var/lib/mongodb-arbiter
+OS:@SIPX_SERVICEDIR@/mongod-arbiter start
+COMMAND:REPAIR
+OS:rm -f /var/lib/mongodb-arbiter/mongod.lock
+OS:/bin/su -- mongodb /usr/bin/mongod --repair
+COMMAND:INITIALIZE
+RS:rs.config()
+RS:rs.initiate({"_id" : "sipxecs", "version" : 1, "members" : [{ "_id" : 0, "host" : "swift.hubler.us:27018"}]})

@@ -1,2 +1,26 @@
-[]
-{"swift.hubler.us:27018": ["MISSING_ARBITER"], "swift.hubler.us:27019": ["MISSING_DATABASE"], "swift.hubler.us:27017": ["PRIMARY"]}
+{
+    "states": {
+        "swift.hubler.us:27018": [
+            "MISSING",
+            "ARBITER"
+        ],
+        "swift.hubler.us:27019": [
+            "MISSING",
+            "SECONDARY"
+        ],
+        "swift.hubler.us:27017": [
+            "PRIMARY"
+        ]
+    },
+    "cluster": [],
+    "model": {
+        "arbiters": [
+            "swift.hubler.us:27018"
+        ],
+        "replSet": "sipxecs",
+        "servers": [
+            "swift.hubler.us:27017",
+            "swift.hubler.us:27019"
+        ]
+    }
+}
