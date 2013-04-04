@@ -15,32 +15,25 @@
 package org.sipfoundry.sipxconfig.mongo;
 
 import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.Writer;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.TreeMap;
 
-import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.sipfoundry.sipxconfig.cfgmgt.ConfigManager;
 import org.sipfoundry.sipxconfig.common.SimpleCommandRunner;
 import org.sipfoundry.sipxconfig.common.UserException;
-import org.sipfoundry.sipxconfig.commserver.Location;
 import org.sipfoundry.sipxconfig.feature.FeatureManager;
 import org.springframework.beans.factory.annotation.Required;
 
 import com.mongodb.util.JSON;
 
 public class MongoAdmin {
-    private static final String MODEL_PARAM = " --model ";
     private static final Log LOG = LogFactory.getLog(MongoAdmin.class);
     private int m_timeout = 1000;
     private int m_backgroundTimeout = 120000; // can take a while for fresh mongo to init
@@ -55,6 +48,11 @@ public class MongoAdmin {
     private String m_analysisToken;
     private File m_modelFile;
     private SimpleCommandRunner m_actionRunner;
+    private ConfigManager m_configManager;
+
+    public void setConfigManager(ConfigManager configManager) {
+        m_configManager = configManager;
+    }
 
     public MongoNode getNode(String id) {
         return getNodesByServer(getStatusToken()).get(id);
@@ -96,16 +94,14 @@ public class MongoAdmin {
             throw new UserException("Operation still in progress");
         }
 
-        try {
-            StringBuilder cmd = new StringBuilder(m_mongoAdminScript).append(MODEL_PARAM);
-            cmd.append(getModelFile().getPath());
-            cmd.append(" --host_port ").append(server);
-            cmd.append(' ').append(action);
-            String response = runBackgroundOk(m_actionRunner, cmd.toString());
-            return response;
-        } catch (IOException e) {
-            throw new UserException(e);
-        }
+        String fqdn = MongoNode.label(server);
+        String remote = m_configManager.getRemoteCommand(fqdn);
+        StringBuilder cmd = new StringBuilder(remote);
+        cmd.append(' ').append(m_mongoAdminScript);
+        cmd.append(" --host_port ").append(server);
+        cmd.append(' ').append(action);
+        String response = runBackgroundOk(m_actionRunner, cmd.toString());
+        return response;
     }
 
     Map<String, MongoNode> getNodesByServer(String statusToken) {
@@ -157,61 +153,14 @@ public class MongoAdmin {
 
     String getStatusToken() {
         if (m_statusToken == null) {
-            try {
-                StringBuilder cmd = new StringBuilder(m_mongoStatusScript).append(MODEL_PARAM);
-                cmd.append(getModelFile().getPath());
-                SimpleCommandRunner runner = new SimpleCommandRunner();
-                m_statusToken = run(runner, cmd.toString());
-            } catch (IOException e) {
-                throw new UserException(e);
-            }
+            StringBuilder cmd = new StringBuilder(m_mongoStatusScript);
+            SimpleCommandRunner runner = new SimpleCommandRunner();
+            m_statusToken = run(runner, cmd.toString());
         }
         return m_statusToken;
     }
 
-    File getModelFile() throws IOException {
-        if (m_modelFile == null) {
-            Writer w = null;
-            try {
-                File modelFile = File.createTempFile("model", "json");
-                w = new FileWriter(modelFile);
-                serverList(w);
-                w.close();
-                m_modelFile = modelFile;
-            } finally {
-                IOUtils.closeQuietly(w);
-            }
-        }
 
-        return m_modelFile;
-    }
-
-    void serverList(Writer sb) throws IOException {
-        List<Location> servers = m_featureManager.getLocationsForEnabledFeature(MongoManager.FEATURE_ID);
-        List<Location> arbiters = m_featureManager.getLocationsForEnabledFeature(MongoManager.ARBITER_FEATURE);
-        serverList(sb, servers, arbiters);
-    }
-
-    void serverList(Writer sb, List<Location> servers, List<Location> arbiters) throws IOException {
-        Map<String, Object> model = new HashMap<String, Object>();
-        if (servers.size() > 0) {
-            model.put("servers", serverIdList(servers, MongoSettings.SERVER_PORT));
-        }
-        if (arbiters.size() > 0) {
-            model.put("arbiters", serverIdList(servers, MongoSettings.ARBITER_PORT));
-        }
-        model.put("replSet", "sipxecs");
-        String json = JSON.serialize(model);
-        sb.write(json);
-    }
-
-    List<String> serverIdList(Collection<Location> servers, int port) {
-        List<String> ids = new ArrayList<String>(servers.size());
-        for (Location l : servers) {
-            ids.add(l.getFqdn() + ':' + port);
-        }
-        return ids;
-    }
 
     String runBackgroundOk(SimpleCommandRunner runner, String cmd) {
         if (!runner.run(StringUtils.split(cmd), m_timeout, m_backgroundTimeout)) {

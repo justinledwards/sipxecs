@@ -230,7 +230,7 @@ if __name__ == '__main__':
                 help='Read the dump from stdin from a cluster and then analyze status')
     parser.add_argument('--verbose', action="store_true", default=False,
                 help='verbose output')
-    parser.add_argument('--model', metavar="file name", required=False,
+    parser.add_argument('--model', metavar="file name", default="@SIPX_CFDATA@/mongo.json",
                 help='JSON Model file of cluster server configuration. Required for all but --parse option')
     args = vars(parser.parse_args())
 

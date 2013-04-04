@@ -94,6 +94,12 @@ public class ConfigManagerImpl implements AddressProvider, ConfigManager, BeanFa
         }
     }
 
+    public String getRemoteCommand(String server) {
+        String home = System.getProperty("user.home");
+        return String.format("/usr/bin/ssh -i %s/.cfagent/ppkeys/localhost.nopass.priv root@%s", home, server);
+
+    }
+
     @Override
     public synchronized void configureAllFeaturesEverywhere() {
         m_outstandingRequest[0] = ConfigRequest.merge(ConfigRequest.always(), m_outstandingRequest[0]);

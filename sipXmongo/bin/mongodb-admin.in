@@ -322,7 +322,7 @@ if __name__ == '__main__':
                 help='Do not actually execute any commands')
     parser.add_argument('--host_port', metavar="name", required=True,
                 help='Mongo server host to run operations on')
-    parser.add_argument('--model', metavar="name", required=True,
+    parser.add_argument('--model', metavar="name", default="@SIPX_CFDATA@/mongo.json",
                 help='Expected replset name for servers')
     parser.add_argument("action", nargs=argparse.REMAINDER)
     args = vars(parser.parse_args())

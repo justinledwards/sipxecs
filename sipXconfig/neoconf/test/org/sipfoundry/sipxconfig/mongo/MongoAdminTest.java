@@ -18,14 +18,11 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
 import java.io.IOException;
-import java.io.StringWriter;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.io.IOUtils;
 import org.junit.Test;
-import org.sipfoundry.sipxconfig.commserver.Location;
 
 public class MongoAdminTest {
     
@@ -36,21 +33,6 @@ public class MongoAdminTest {
         Map<String, MongoNode> nodes = admin.getNodesByServer(token);
         assertEquals(3, nodes.size());
         assertNotNull(nodes.get("swift.hubler.us:27017"));
-    }
-    
-    @Test
-    public void getServerList() throws IOException {
-        Location s1 = new Location("one");
-        Location s2 = new Location("two");
-        Location s3 = new Location("three");
-        Location s4 = new Location("four");
-        Arrays.asList(s1, s2);
-        Arrays.asList(s3, s4);
-        MongoAdmin admin = new MongoAdmin();
-        StringWriter actual = new StringWriter();
-        admin.serverList(actual, Arrays.asList(s1, s2), Arrays.asList(s3, s4));
-        assertEquals("{ \"servers\" : [ \"one:27017\" , \"two:27017\"] , \"arbiters\" : "
-                + "[ \"one:27018\" , \"two:27018\"] , \"replSet\" : \"sipxecs\"}", actual.toString());
     }
     
     // not run as command not usable in unit test env.

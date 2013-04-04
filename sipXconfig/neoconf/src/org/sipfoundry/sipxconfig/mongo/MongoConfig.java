@@ -20,7 +20,11 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.io.IOUtils;
@@ -34,6 +38,8 @@ import org.sipfoundry.sipxconfig.cfgmgt.KeyValueConfiguration;
 import org.sipfoundry.sipxconfig.commserver.Location;
 import org.sipfoundry.sipxconfig.commserver.LocationsManager;
 import org.sipfoundry.sipxconfig.feature.FeatureManager;
+
+import com.mongodb.util.JSON;
 
 public class MongoConfig implements ConfigProvider {
     private static final Log LOG = LogFactory.getLog(MongoConfig.class);
@@ -77,6 +83,37 @@ public class MongoConfig implements ConfigProvider {
                 IOUtils.closeQuietly(server);
             }
         }
+
+        List<Location> arbiters = fm.getLocationsForEnabledFeature(MongoManager.ARBITER_FEATURE);
+        Writer w = null;
+        try {
+            File f = new File(manager.getGlobalDataDirectory(), "mongo.json");
+            w = new FileWriter(f);
+            serverList(w, dbs, arbiters);
+        } finally {
+            IOUtils.closeQuietly(w);
+        }
+    }
+
+    void serverList(Writer sb, List<Location> servers, List<Location> arbiters) throws IOException {
+        Map<String, Object> model = new HashMap<String, Object>();
+        if (servers.size() > 0) {
+            model.put("servers", serverIdList(servers, MongoSettings.SERVER_PORT));
+        }
+        if (arbiters.size() > 0) {
+            model.put("arbiters", serverIdList(servers, MongoSettings.ARBITER_PORT));
+        }
+        model.put("replSet", "sipxecs");
+        String json = JSON.serialize(model);
+        sb.write(json);
+    }
+
+    List<String> serverIdList(Collection<Location> servers, int port) {
+        List<String> ids = new ArrayList<String>(servers.size());
+        for (Location l : servers) {
+            ids.add(l.getFqdn() + ':' + port);
+        }
+        return ids;
     }
 
     public void setMongoReplicateSetManager(MongoReplicaSetManager2 mongoReplicateSetManager) {

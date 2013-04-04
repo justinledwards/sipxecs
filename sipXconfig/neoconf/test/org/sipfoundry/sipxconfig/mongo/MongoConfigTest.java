@@ -19,6 +19,8 @@ package org.sipfoundry.sipxconfig.mongo;
 
 import static org.junit.Assert.assertEquals;
 
+import java.io.IOException;
+import java.io.StringWriter;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -52,4 +54,20 @@ public class MongoConfigTest {
         assertEquals("mongodb://one:1/?slaveOk=true", m_config.getConnectionUrl(m_single, 1));
         assertEquals("mongodb://one:1,two:1/?slaveOk=true", m_config.getConnectionUrl(m_multi, 1));
     }
+
+    @Test
+    public void getServerList() throws IOException {
+        Location s1 = new Location("one");
+        Location s2 = new Location("two");
+        Location s3 = new Location("three");
+        Location s4 = new Location("four");
+        Arrays.asList(s1, s2);
+        Arrays.asList(s3, s4);
+        StringWriter actual = new StringWriter();
+        m_config.serverList(actual, Arrays.asList(s1, s2), Arrays.asList(s3, s4));
+        assertEquals("{ \"servers\" : [ \"one:27017\" , \"two:27017\"] , \"arbiters\" : "
+                + "[ \"one:27018\" , \"two:27018\"] , \"replSet\" : \"sipxecs\"}", actual.toString());
+    }
+    
+
 }

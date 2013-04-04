@@ -90,4 +90,7 @@ public interface ConfigManager {
      * Only used by setup init task
      */
     public void runProviders();
+
+    public String getRemoteCommand(String server);
+
 }

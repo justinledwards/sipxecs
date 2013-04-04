@@ -16,8 +16,9 @@
   <bean id="mongoAdmin" class="org.sipfoundry.sipxconfig.mongo.MongoAdmin" scope="prototype">
     <property name="mongoStatusScript" value="${sysdir.bin}/mongodb-status"/>
     <property name="mongoAnalyzerScript" value="${sysdir.bin}/mongodb-analyzer"/>
-    <property name="mongoAdminScript" value="${sysdir.bin}/mongodb-admin"/>
+    <property name="mongoAdminScript" value="mongodb-admin"/>
     <property name="featureManager" ref="featureManager"/>
+    <property name="configManager" ref="configManager"/>
   </bean>
 
   <bean id="mongoManagerImpl" class="org.sipfoundry.sipxconfig.mongo.MongoManagerImpl">
