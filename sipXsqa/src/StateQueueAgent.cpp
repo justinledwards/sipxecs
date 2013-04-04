@@ -13,6 +13,7 @@
  * details.
  */
 
+#include "sqa/SQADefines.h"
 #include "sqa/StateQueueAgent.h"
 #include "sqa/StateQueueNotification.h"
 #include "os/OsLogger.h"
@@ -24,28 +25,30 @@ StateQueueAgent::StateQueueAgent(ServiceOptions& options) :
   _pIoServiceThread(0),
   _ioService(),
   _publisher(this),
+  _externalPublisher(options, 0),
   _queueWorkSpaceIndex(REDIS_STATEQUEUE_WORKSPACE),
   _listener(this),
   _inactivityThreshold(60),
-  _pEntityDb(0),
-  _pEntityDbConnectionInfo(0),
   _terminated(false)
 {
+    //TODO: REFACTOR this in case options do not exist and getOptions returns false
     std::string port;
     std::string address;
     _options.getOption("zmq-subscription-address", address);
     _options.getOption("zmq-subscription-port", port);
     _publisherAddress.append("tcp://").append(address).append(":").append(port);
+    OS_LOG_INFO(FAC_NET, "StateQueueAgent::StateQueueAgent"
+            " publisher address is:" << _publisherAddress);
 
-    OS_LOG_INFO(FAC_NET, "StateQueueAgent CREATED.");
+    OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::StateQueueAgent"
+            " External publisher object CREATED.");
+
+    OS_LOG_INFO(FAC_NET, "StateQueueAgent::StateQueueAgent"
+            " StateQueueAgent CREATED.");
 }
 
 StateQueueAgent::~StateQueueAgent()
 {
-  delete _pEntityDb;
-  delete _pEntityDbConnectionInfo;
-  _pEntityDb = 0;
-  _pEntityDbConnectionInfo = 0;
   stop();
   OS_LOG_INFO(FAC_NET, "StateQueueAgent DESTROYED.");
 }
@@ -71,7 +74,7 @@ void StateQueueAgent::onRedisWatcherEvent(const std::vector<std::string>& event)
       StateQueueRecord rec;
       rec.id = REDIS_CHANNEL;
       rec.data = event[2];
-      publish(rec);
+      publish(rec, false, false);
     }
   }
 }
@@ -94,26 +97,15 @@ void StateQueueAgent::internal_run_io_service()
     _publisher.run();
   }
 
-  //
-  // Check if oplog needs to be published
-  //
-  std::string oplogConfig;
-  if (_options.getOption("publish-entity-oplog-config", oplogConfig))
+  if (!_externalPublisher.start())
   {
-    try
-    {
-      const mongo::ConnectionString connString =
-        MongoDB::ConnectionInfo::connectionStringFromFile(oplogConfig);
-      _pEntityDbConnectionInfo = new MongoDB::ConnectionInfo(connString, "imdb.identity");
-      _pEntityDb = new MongoOpLog(*_pEntityDbConnectionInfo);
-      _pEntityDb->registerCallback(MongoOpLog::Insert, boost::bind(&StateQueueAgent::onOpLogInsert, this, _1));
-      _pEntityDb->registerCallback(MongoOpLog::Update, boost::bind(&StateQueueAgent::onOpLogUpdate, this, _1));
-      _pEntityDb->registerCallback(MongoOpLog::Delete, boost::bind(&StateQueueAgent::onOpLogDelete, this, _1));
-      _pEntityDb->run();
-    }
-    catch(...)
-    {
-    }
+      OS_LOG_NOTICE(FAC_NET, "StateQueueAgent::internal_run_io_service"
+              " external publisher failed to start");
+  }
+  else
+  {
+      OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::internal_run_io_service"
+              " External publisher started");
   }
 
   //
@@ -124,7 +116,7 @@ void StateQueueAgent::internal_run_io_service()
     boost::bind(&StateQueueAgent::onRedisWatcherDisconnect, this, _1),
     boost::bind(&StateQueueAgent::onRedisWatcherEvent, this, _1)
   );
-  
+
   std::vector<std::string> watch;
   watch.push_back("SUBSCRIBE");
   watch.push_back(REDIS_CHANNEL);
@@ -144,13 +136,6 @@ void StateQueueAgent::stop()
 
   _terminated = true;
 
-  if (_pEntityDb)
-  {
-    _pEntityDb->stop();
-    delete _pEntityDb;
-    _pEntityDb = 0;
-  }
-
   //
   // Unsubscribe from redis channel
   //
@@ -166,40 +151,11 @@ void StateQueueAgent::stop()
     _pIoServiceThread->join();
   delete _pIoServiceThread;
   _pIoServiceThread = 0;
+
   _publisher.stop();
-}
-
-void StateQueueAgent::onOpLogUpdate(const std::string& opLog)
-{
-  StateQueueRecord record;
-  record.id = "sqw.identity.oplog.update";
-  record.data = opLog;
-  publish(record);
-
-  record.id = "sqw.identity.oplog.all";
-  publish(record);
-}
-
-void StateQueueAgent::onOpLogInsert(const std::string& opLog)
-{
-  StateQueueRecord record;
-  record.id = "sqw.identity.oplog.insert";
-  record.data = opLog;
-  publish(record);
-
-  record.id = "sqw.identity.oplog.all";
-  publish(record);
-}
-
-void StateQueueAgent::onOpLogDelete(const std::string& opLog)
-{
-  StateQueueRecord record;
-  record.id = "sqw.identity.oplog.delete";
-  record.data = opLog;
-  publish(record);
-
-  record.id = "sqw.identity.oplog.all";
-  publish(record);
+  _externalPublisher.stop();
+  OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::stop"
+          " External publisher stopped");
 }
 
 void StateQueueAgent::onIncomingConnection(StateQueueConnection::Ptr conn)
@@ -218,7 +174,7 @@ void StateQueueAgent::onDestroyConnection(StateQueueConnection::Ptr conn)
     record.data = conn->getApplicationId();
     record.data += "|";
     record.data += conn->getRemoteAddress();
-    publish(record);
+    publish(record, conn->isExternalConnection(), false);
   }
 
   _listener.destroyConnection(conn);
@@ -259,7 +215,7 @@ void StateQueueAgent::onIncomingRequest(StateQueueConnection& conn, const char* 
       record.data = conn.getApplicationId();
       record.data += "|";
       record.data += conn.getRemoteAddress();
-      publish(record);
+      publish(record, conn.isExternalConnection(), false);
       //
       // Mark it as published
       //
@@ -284,29 +240,33 @@ void StateQueueAgent::onIncomingRequest(StateQueueConnection& conn, const char* 
       record.data = conn.getApplicationId();
       record.data += "|";
       record.data += conn.getRemoteAddress();
-      publish(record);
+      publish(record, conn.isExternalConnection(), false);
     }
   }
+
+  bool noExternalPublish = false; // by default all messages are allowed to be published externally
+  // check if it was explicitly requested not to publish this externally
+  message.get("message-no-external", noExternalPublish);
 
   switch (type)
   {
     case StateQueueMessage::Signin:
-      handleSignin(conn, message, id, appId);
+      handleSignin(conn, message, id, appId, noExternalPublish);
       break;
     case StateQueueMessage::Logout:
-      handleLogout(conn, message, id, appId);
+      handleLogout(conn, message, id, appId, noExternalPublish);
       break;
     case StateQueueMessage::Enqueue:
       handleEnqueue(conn, message, id, appId);
       break;
     case StateQueueMessage::EnqueueAndPublish:
-      handleEnqueueAndPublish(conn, message, id, appId);
+      handleEnqueueAndPublish(conn, message, id, appId, noExternalPublish);
       break;
     case StateQueueMessage::Publish:
-      handlePublish(conn, message, id, appId);
+      handlePublish(conn, message, id, appId, noExternalPublish);
       break;
     case StateQueueMessage::PublishAndPersist:
-      handlePublishAndPersist(conn, message, id, appId);
+      handlePublishAndPersist(conn, message, id, appId, noExternalPublish);
       break;
     case StateQueueMessage::Pop:
       handlePop(conn, message, id, appId);
@@ -382,7 +342,7 @@ void StateQueueAgent::handlePing(StateQueueConnection& conn, StateQueueMessage& 
 }
 
 void StateQueueAgent::handleEnqueueAndPublish(StateQueueConnection& conn, StateQueueMessage& message,
-    const std::string& id, const std::string& appId)
+    const std::string& id, const std::string& appId, bool noExternalPublish)
 {
   StateQueueRecord record;
   record.id = id;
@@ -403,7 +363,7 @@ void StateQueueAgent::handleEnqueueAndPublish(StateQueueConnection& conn, StateQ
 
   record.id = "sqw.";
   record.id += id.substr(4);
-  publish(record);
+  publish(record, conn.isExternalConnection(), noExternalPublish);
 
   StateQueueMessage response;
   response.setType(message.getType());
@@ -444,13 +404,15 @@ void StateQueueAgent::enqueue(StateQueueRecord& record)
   //
   if (!record.expires)
     record.expires = 30;
+
   _dataStore.set(this->_queueWorkSpaceIndex, record, record.expires);
+
   _publisher.publish(record);
 }
 
 
 void StateQueueAgent::handlePublish(StateQueueConnection& conn, StateQueueMessage& message,
-    const std::string& id, const std::string& appId)
+    const std::string& id, const std::string& appId, bool noExternalPublish)
 {
   StateQueueRecord record;
   record.id = id;
@@ -462,16 +424,12 @@ void StateQueueAgent::handlePublish(StateQueueConnection& conn, StateQueueMessag
   else
     noresponse = false;
 
-  OS_LOG_INFO(FAC_NET, "StateQueueAgent::handlePublish "
-          << "Received new command PUBLISH. "
-          << " message-id: " << record.id)
-
   OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handlePublish "
           << "Received new command PUBLISH. "
           << " message-id: " << record.id
           << " message-data: " << record.data);
 
-  publish(record);
+  publish(record, conn.isExternalConnection(), noExternalPublish);
 
   if (!noresponse)
   {
@@ -483,7 +441,7 @@ void StateQueueAgent::handlePublish(StateQueueConnection& conn, StateQueueMessag
 }
 
 void StateQueueAgent::handlePublishAndPersist(StateQueueConnection& conn, StateQueueMessage& message,
-    const std::string& id, const std::string& appId)
+    const std::string& id, const std::string& appId, bool noExternalPublish)
 {
   int expires;
   if (!message.get("message-expires",  expires) || expires <= 0)
@@ -532,8 +490,7 @@ void StateQueueAgent::handlePublishAndPersist(StateQueueConnection& conn, StateQ
 
   set(dataId, workspace, record, expires);
 
-
-  publish(record);
+  publish(record, conn.isExternalConnection(), noExternalPublish);
 
   StateQueueMessage response;
   response.setType(message.getType());
@@ -541,15 +498,27 @@ void StateQueueAgent::handlePublishAndPersist(StateQueueConnection& conn, StateQ
   conn.write(response.data());
 }
 
-void StateQueueAgent::publish(StateQueueRecord& record)
+
+void StateQueueAgent::publish(StateQueueRecord& record,  bool isExternalConnection, bool noExternalPublish)
 {
   //
   // persist the new record and tell everyne about it.
   //
   if (!record.expires)
     record.expires = 30;
+
   record.watcherData = true;
+
   _publisher.publish(record);
+
+  if (!isExternalConnection // publish only records from internal publishers
+          && !noExternalPublish // publish only if it is allowed by the creator of this record
+          )
+  {
+      OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handlePublish"
+              " message received from internal publisher(will publish to externals)");
+      _externalPublisher.publish(record);
+  }
 }
 
 void StateQueueAgent::handlePop(StateQueueConnection& conn, StateQueueMessage& message, const std::string& id, const std::string& appId)
@@ -1027,7 +996,7 @@ void StateQueueAgent::onQueueTimeout(const std::string& id, const boost::any& da
 }
 
 void StateQueueAgent::handleSignin(StateQueueConnection& conn, StateQueueMessage& message,
-    const std::string& id, const std::string& appId)
+    const std::string& id, const std::string& appId, bool noExternalPublish)
 {
   int subscriptionExpires;
   if (!message.get("subscription-expires", subscriptionExpires))
@@ -1043,34 +1012,40 @@ void StateQueueAgent::handleSignin(StateQueueConnection& conn, StateQueueMessage
     return;
   }
 
-  std::string serviceType;
+  std::string serviceType = SQA_TYPE_INVALID;
   if (!message.get("service-type", serviceType))
   {
     sendErrorResponse(message.getType(), conn, id, "Missing required argument service-type.");
     return;
   }
 
-  if (serviceType == "worker")
+  bool externalService = false;
+  if (message.get("external-service", externalService))
+  {
+      OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handleSignin"
+              " external signin received.");
+      conn.markExternalConnection();
+  }
+
+  if (SQA_TYPE_WORKER == serviceType)
     _publisher.addSubscriber(subscriptionEvent, appId, subscriptionExpires);
 
   OS_LOG_NOTICE(FAC_NET, "StateQueueAgent::handleSignin " << appId << "/" << subscriptionEvent << " RECEIVED");
-
   sendOkResponse(message.getType(), conn, id, _publisherAddress);
 
   conn.setApplicationId(appId);
-
 
   StateQueueRecord record;
   record.id = "sqw.connection.signin";
   record.data = conn.getApplicationId();
   record.data += "|";
   record.data += conn.getRemoteAddress();
-  publish(record);
+  publish(record, conn.isExternalConnection(), noExternalPublish);
 
 }
 
 void StateQueueAgent::handleLogout(StateQueueConnection& conn, StateQueueMessage& message,
-    const std::string& id, const std::string& appId)
+    const std::string& id, const std::string& appId, bool noExternalPublish)
 {
   std::string subscriptionEvent;
   if (!message.get("subscription-event", subscriptionEvent))
@@ -1079,14 +1054,14 @@ void StateQueueAgent::handleLogout(StateQueueConnection& conn, StateQueueMessage
     return;
   }
 
-  std::string serviceType;
+  std::string serviceType = SQA_TYPE_INVALID;
   if (!message.get("service-type", serviceType))
   {
     sendErrorResponse(message.getType(), conn, id, "Missing required argument service-type.");
     return;
   }
 
-  if (serviceType == "worker")
+  if (SQA_TYPE_WORKER == serviceType)
     _publisher.removeSubscriber(subscriptionEvent, appId);
 
   OS_LOG_NOTICE(FAC_NET, "StateQueueAgent::handleLogout " << appId << "/" << subscriptionEvent << " RECEIVED");
@@ -1098,7 +1073,8 @@ void StateQueueAgent::handleLogout(StateQueueConnection& conn, StateQueueMessage
   record.data = conn.getApplicationId();
   record.data += "|";
   record.data += conn.getRemoteAddress();
-  publish(record);
+
+  publish(record, conn.isExternalConnection(), noExternalPublish);
 }
 
 

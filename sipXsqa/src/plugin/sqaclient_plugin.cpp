@@ -43,7 +43,7 @@ SQAPublisher* plugin_createPublisher(
   int poolSize // Number of active connections to SQA
 )
 {
-  return new SQAPublisher(applicationId, serviceAddress, servicePort, poolSize, SQA_CONN_READ_TIMEOUT, SQA_CONN_WRITE_TIMEOUT);
+  return new SQAPublisher(applicationId, serviceAddress, servicePort, false, poolSize, SQA_CONN_READ_TIMEOUT, SQA_CONN_WRITE_TIMEOUT);
 }
 
 void plugin_destroyPublisher(SQAPublisher* obj)

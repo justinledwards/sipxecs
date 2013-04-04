@@ -77,6 +77,8 @@ public:
 class SQAWatcher
 {
 public:
+    typedef boost::shared_ptr<SQAWatcher> Ptr;
+
   SQAWatcher(
     const char* applicationId, // Unique application ID that will identify this watcher to SQA
     const char* serviceAddress, // The IP address of the SQA
@@ -151,10 +153,13 @@ private:
 class SQAPublisher
 {
 public:
+    typedef boost::shared_ptr<SQAPublisher> Ptr;
+
   SQAPublisher(
     const char* applicationId, // Unique application ID that will identify this watcher to SQA
     const char* serviceAddress, // The IP address of the SQA
     const char* servicePort, // The port where SQA is listening for connections
+    bool isExternal, // True, if the SQA agent is on another server
     int poolSize, // Number of active connections to SQA
     int readTimeout, // read timeout for the control socket
     int writeTimeout // write timeout for the control socket
@@ -435,6 +440,7 @@ inline SQAWatcher::SQAWatcher(
           serviceAddress,
           servicePort,
           eventId,
+          false,
           poolSize,
           readTimeout,
           writeTimeout));
@@ -452,6 +458,7 @@ inline SQAWatcher::SQAWatcher(
           StateQueueClient::Watcher,
           applicationId,
           eventId,
+          false,
           poolSize,
           readTimeout,
           writeTimeout));
@@ -560,6 +567,7 @@ inline SQAPublisher::SQAPublisher(
   const char* applicationId, // Unique application ID that will identify this watcher to SQA
   const char* serviceAddress, // The IP address of the SQA
   const char* servicePort, // The port where SQA is listening for connections
+  bool isExternal, // True, if the SQA agent is on another server
   int poolSize, // Number of active connections to SQA
   int readTimeout, // read timeout for the control socket
   int writeTimeout // write timeout for the control socket
@@ -570,7 +578,8 @@ inline SQAPublisher::SQAPublisher(
           applicationId,
           serviceAddress,
           servicePort,
-          "publisher",
+          SQA_TYPE_PUBLISHER,
+          isExternal,
           poolSize,
           readTimeout,
           writeTimeout));
@@ -586,7 +595,7 @@ inline SQAPublisher::SQAPublisher(
   _connection = (uintptr_t)(new StateQueueClient(
           StateQueueClient::Publisher,
           applicationId,
-          "publisher",
+          SQA_TYPE_PUBLISHER,
           poolSize,
           readTimeout,
           writeTimeout));
@@ -701,6 +710,7 @@ inline SQADealer::SQADealer(
           serviceAddress,
           servicePort,
           eventId,
+          false,
           poolSize,
           readTimeout,
           writeTimeout));
@@ -718,6 +728,7 @@ inline SQADealer::SQADealer(
           StateQueueClient::Publisher,
           applicationId,
           eventId,
+          false,
           poolSize,
           readTimeout,
           writeTimeout));
@@ -828,6 +839,7 @@ inline SQAWorker::SQAWorker(
           serviceAddress,
           servicePort,
           eventId,
+          false,
           poolSize,
           readTimeout,
           writeTimeout));
@@ -845,6 +857,7 @@ inline SQAWorker::SQAWorker(
           StateQueueClient::Worker,
           applicationId,
           eventId,
+          false,
           poolSize,
           readTimeout,
           writeTimeout));

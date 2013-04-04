@@ -30,7 +30,8 @@ struct StateQueueRecord
   std::vector<std::string> exclude;
   int retry;
   int expires;
-  bool watcherData;
+  bool watcherData; /// true, this record is an event for a watcher
+                    /// false, this record is work from a dealer for a worker
 
   bool toJson(std::string& jsonString) const;
   bool fromJson(const std::string& jsonString);

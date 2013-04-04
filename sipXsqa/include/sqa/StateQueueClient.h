@@ -28,16 +28,17 @@
 #include <os/OsLogger.h>
 #include <boost/lexical_cast.hpp>
 #include "ServiceOptions.h"
+#include "SQADefines.h"
 
 #define SQA_LINGER_TIME_MILLIS 5000
 #define SQA_TERMINATE_STRING "__TERMINATE__"
 #define SQA_CONN_MAX_READ_BUFF_SIZE 65536
 #define SQA_CONN_READ_TIMEOUT 1000
 #define SQA_CONN_WRITE_TIMEOUT 1000
-#define SQA_KEY_MIN 22172
-#define SQA_KEY_ALPHA 22180
+#define SQA_KEY_MIN 22172	//TODO: This define and its value needs to be documented
+#define SQA_KEY_ALPHA 22180	//TODO: This define and its value needs to be documented
 #define SQA_KEY_DEFAULT SQA_KEY_MIN
-#define SQA_KEY_MAX 22200
+#define SQA_KEY_MAX 22200	//TODO: This define and its value needs to be documented
 #define SQA_KEEP_ALIVE_TICKS 30
 
 class StateQueueClient : public boost::enable_shared_from_this<StateQueueClient>, private boost::noncopyable
@@ -269,34 +270,6 @@ public:
     
     bool connect()
     {
-      //
-      // Initialize State Queue Agent Publisher if an address is provided
-      //
-      if (_serviceAddress.empty() || _servicePort.empty())
-      {
-        std::string sqaControlAddress;
-        std::string sqaControlPort;
-        std::ostringstream sqaconfig;
-        sqaconfig << SIPX_CONFDIR << "/" << "sipxsqa-client.ini";
-        ServiceOptions configOptions(sqaconfig.str());
-        std::string controlAddress;
-        std::string controlPort;
-        if (configOptions.parseOptions())
-        {
-          bool enabled = false;
-          if (configOptions.getOption("enabled", enabled, enabled) && enabled)
-          {
-            configOptions.getOption("sqa-control-address", _serviceAddress);
-            configOptions.getOption("sqa-control-port", _servicePort);
-          }
-          else
-          {
-            OS_LOG_ERROR(FAC_NET, "BlockingTcpClient::connect() Unable to read connection information from " << sqaconfig.str());
-            return false;
-          }
-        }
-      }
-
       if(_serviceAddress.empty() || _servicePort.empty())
       {
         OS_LOG_ERROR(FAC_NET, "BlockingTcpClient::connect() remote address is not set");
@@ -490,6 +463,7 @@ protected:
   typedef boost::recursive_mutex mutex;
   typedef boost::lock_guard<mutex> mutex_lock;
   boost::asio::io_service _ioService;
+  bool _isExternal; /// True, if this SQA client will connect to an external SQA agent
   std::size_t _poolSize;
   std::string _serviceAddress;
   std::string _servicePort;
@@ -522,6 +496,7 @@ public:
         const std::string& serviceAddress,
         const std::string& servicePort,
         const std::string& zmqEventId,
+        bool isExternal,
         std::size_t poolSize,
         int readTimeout = SQA_CONN_READ_TIMEOUT,
         int writeTimeout = SQA_CONN_WRITE_TIMEOUT,
@@ -529,6 +504,7 @@ public:
         ) :
     _type(type),
     _ioService(),
+    _isExternal(isExternal),
     _poolSize(poolSize),
     _serviceAddress(serviceAddress),
     _servicePort(servicePort),
@@ -601,6 +577,7 @@ public:
         ) :
     _type(type),
     _ioService(),
+    _isExternal(false),
     _poolSize(poolSize),
     _clientPool(_poolSize),
     _terminate(false),
@@ -627,16 +604,31 @@ public:
         _zmqSocket->setsockopt(ZMQ_LINGER, &linger, sizeof(int));
       }
 
+        std::ostringstream sqaconfig;
+        sqaconfig << SIPX_CONFDIR << "/" << "sipxsqa-client.ini";
+        ServiceOptions configOptions(sqaconfig.str());
+        if (configOptions.parseOptions())
+        {
+          bool enabled = false;
+          if (configOptions.getOption("enabled", enabled, enabled) && enabled)
+          {
+            configOptions.getOption("sqa-control-address", _serviceAddress);
+            configOptions.getOption("sqa-control-port", _servicePort);
+          }
+          else
+          {
+            OS_LOG_ERROR(FAC_NET, "BlockingTcpClient::connect() Unable to read connection information from " << sqaconfig.str());
+            assert(false);
+          }
+        }
+
       for (std::size_t i = 0; i < _poolSize; i++)
       {
         BlockingTcpClient* pClient = new BlockingTcpClient(_ioService, readTimeout, writeTimeout, i == 0 ? SQA_KEY_ALPHA : SQA_KEY_DEFAULT);
-        pClient->connect();
+        pClient->connect(_serviceAddress, _servicePort);
 
         if (_localAddress.empty())
           _localAddress = pClient->getLocalAddress();
-        
-        _serviceAddress = pClient->_serviceAddress;
-        _servicePort = pClient->_servicePort;
 
         BlockingTcpClient::Ptr client(pClient);
         _clientPointers.push_back(client);
@@ -734,6 +726,7 @@ private:
       else
         sleepCount = 0;
      
+      //TODO: Does this ensure that double signins do not occur (subsequent signing without a previous logout)?
       if (_refreshSignin && (--_currentSigninTick == 0))
       {
         std::string publisherAddress;
@@ -816,18 +809,23 @@ private:
     std::string clientType;
     if (_type == Publisher)
     {
-      request.set("service-type", "publisher");
-      clientType = "publisher";
+      request.set("service-type", SQA_TYPE_PUBLISHER);
+      clientType = SQA_TYPE_PUBLISHER;
     }
     else if (_type == Worker)
     {
-      request.set("service-type", "worker");
-      clientType = "worker";
+      request.set("service-type", SQA_TYPE_WORKER);
+      clientType = SQA_TYPE_WORKER;
     }
     else if (_type == Watcher)
     {
-      request.set("service-type", "watcher");
-      clientType = "watcher";
+      request.set("service-type", SQA_TYPE_WATCHER);
+      clientType = SQA_TYPE_WATCHER;
+    }
+
+    if (_isExternal)
+    {
+        request.set("external-service", _isExternal);
     }
 
     OS_LOG_NOTICE(FAC_NET, "StateQueueClient::signin Type=" << clientType << " SIGNIN");
@@ -868,18 +866,18 @@ private:
     std::string clientType;
     if (_type == Publisher)
     {
-      request.set("service-type", "publisher");
-      clientType = "publisher";
+      request.set("service-type", SQA_TYPE_PUBLISHER);
+      clientType = SQA_TYPE_PUBLISHER;
     }
     else if (_type == Worker)
     {
-      request.set("service-type", "worker");
-      clientType = "worker";
+      request.set("service-type", SQA_TYPE_WORKER);
+      clientType = SQA_TYPE_WORKER;
     }
     else if (_type == Watcher)
     {
-      request.set("service-type", "watcher");
-      clientType = "watcher";
+      request.set("service-type", SQA_TYPE_WATCHER);
+      clientType = SQA_TYPE_WATCHER;
     }
     
     StateQueueMessage response;
@@ -1001,7 +999,7 @@ private:
       boost::this_thread::yield();
     }
     //
-    // Check if we are in the exlude list
+    // Check if we are in the exclude list
     //
     if (data.find(_applicationId.c_str()) != std::string::npos)
     {
@@ -1191,7 +1189,7 @@ private:
       return false;
     }
 
-    if (!conn->isConnected() && !conn->connect())
+    if (!conn->isConnected() && !conn->connect(_serviceAddress, _servicePort))
     {
       //
       // Put it back to the queue.  The server is down.
@@ -1375,10 +1373,17 @@ public:
       return false;
 
     std::ostringstream ss;
+    if (!_isExternal)
+    {
     ss << "sqw." << eventId << "."
        << std::hex << std::uppercase
        << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
        << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
+    }
+    else
+    {
+        ss << eventId;
+    }
     return internal_publish(ss.str(), data, noresponse);
   }
 

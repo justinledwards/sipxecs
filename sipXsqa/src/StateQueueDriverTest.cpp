@@ -130,7 +130,7 @@ DEFINE_TEST(TestDriver, TestWatcher)
   _pAgent->options().getOption("sqa-control-address", address);
   _pAgent->options().getOption("sqa-control-port", port);
   StateQueueClient* pPublisher = GET_RESOURCE(TestDriver, StateQueueClient*, "simple_publisher");
-  StateQueueClient watcher(StateQueueClient::Watcher, "StateQueueDriverTest", address, port, "watcher-data",  1);
+  StateQueueClient watcher(StateQueueClient::Watcher, "StateQueueDriverTest", address, port, "watcher-data",  false, 1);
   boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
   ASSERT_COND(pPublisher->publish("watcher-data-sample", "Hello SQA!", false));
   std::string watcherData;
@@ -147,7 +147,7 @@ DEFINE_TEST(TestDriver, TestPublishAndPersist)
   _pAgent->options().getOption("sqa-control-address", address);
   _pAgent->options().getOption("sqa-control-port", port);
 
-  SQAPublisher publisher("TestPublishAndPersist", address.c_str(), port.c_str(), 1, 100, 100);
+  SQAPublisher publisher("TestPublishAndPersist", address.c_str(), port.c_str(), false, 1, 100, 100);
   SQAWatcher watcher("TestPublishAndPersist", address.c_str(), port.c_str(), "pub&persist", 1, 100, 100);
   boost::this_thread::sleep(boost::posix_time::milliseconds(100));
   ASSERT_COND(publisher.publishAndPersist(5, "pub&persist", "test-data", 10));
@@ -275,8 +275,8 @@ bool StateQueueDriverTest::runTests()
   // Define common resource accessible by all unit tests
   //
   DEFINE_RESOURCE(TestDriver, "state_agent", &_agent);
-  DEFINE_RESOURCE(TestDriver, "simple_pop_client", new StateQueueClient(StateQueueClient::Worker, "StateQueueDriverTest", address, port, "reg",  2));
-  DEFINE_RESOURCE(TestDriver, "simple_publisher", new StateQueueClient(StateQueueClient::Publisher, "StateQueueDriverTest", address, port, "reg",  2));
+  DEFINE_RESOURCE(TestDriver, "simple_pop_client", new StateQueueClient(StateQueueClient::Worker, "StateQueueDriverTest", address, port, "reg", false, 2));
+  DEFINE_RESOURCE(TestDriver, "simple_publisher", new StateQueueClient(StateQueueClient::Publisher, "StateQueueDriverTest", address, port, "reg", false, 2));
 
   boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
   

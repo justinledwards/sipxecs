@@ -8,6 +8,8 @@ nobase_include_HEADERS = \
 	sqa/RedisClientAsync.h \
 	sqa/Semaphore.h \
 	sqa/ServiceOptions.h \
+	sqa/SQAExternalPublisher.h \
+	sqa/SQADefines.h \
 	sqa/StateQueueAgent.h \
 	sqa/StateQueueClient.h \
 	sqa/StateQueueConnection.h \

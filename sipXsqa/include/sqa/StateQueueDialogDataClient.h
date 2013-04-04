@@ -48,6 +48,7 @@ inline StateQueueDialogDataClient::StateQueueDialogDataClient(
         serviceAddress,
         servicePort,
         "dialog-state",
+        false,
         poolSize),
   _workspace(3)
 {

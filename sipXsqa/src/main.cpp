@@ -29,7 +29,7 @@ int main(int argc, char** argv)
   service.addOptionString("zmq-subscription-port", ": Port where to send subscription for events.");
   service.addOptionString("sqa-control-port", ": Port where to send control commands.");
   service.addOptionString("sqa-control-address", ": Address where to send control commands.");
-  service.addOptionString("publish-entity-oplog-config", ": Set this value if you want SQA to publish oplogs from mongo for the IdentityDB.");
+//  service.addOptionInt("id", ": Address where to send control commands.");
   service.addOptionFlag("test-driver", ": Set this flag if you want to run the driver unit tests to ensure proper operations.");
   
 
@@ -46,6 +46,41 @@ int main(int argc, char** argv)
 
   StateQueueAgent sqa(service);
   sqa.run();
+
+#if 0
+  int id = 0;
+  service.getOption("id", id);
+
+  if (id == 1)
+  {
+      std::string address="192.168.13.2";
+      std::string port="5240";
+      SQAPublisher publisher("THEPublisher", address.c_str(), port.c_str(), false, 1, 100, 100);
+      while (1)
+      {
+      boost::this_thread::sleep(boost::posix_time::milliseconds(3000));
+      if (true != publisher.publish("pub", "test-data", true))
+          printf("lol1\n");
+      }
+  }
+  else if (id == 2)
+  {
+      std::string address="192.168.13.2";
+      std::string port="6240";
+
+      SQAWatcher watcher("THEWatcher", address.c_str(), port.c_str(), "", 1, 100, 100);
+
+      while(1)
+      {
+    SQAEvent* pEvent = watcher.watch();
+    if (!pEvent)
+        printf("lol2\n");
+    else
+        printf("%s %s\n", pEvent->id, pEvent->data);
+    delete pEvent;
+      }
+  }
+#endif
 
   if (service.hasOption("test-driver"))
   {

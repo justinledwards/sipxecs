@@ -56,7 +56,7 @@ public:
         const std::string& servicePort,
         const std::string& zmqEventId,
         std::size_t poolSize = 1) :
-                StateQueueClient(StateQueueClient::Worker, applicationId, serviceAddress, servicePort, zmqEventId, poolSize),
+                StateQueueClient(StateQueueClient::Worker, applicationId, serviceAddress, servicePort, zmqEventId, false, poolSize),
                 _pThread(0),
                 total(0)
   {

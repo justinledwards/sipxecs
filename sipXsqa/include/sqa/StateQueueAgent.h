@@ -30,8 +30,8 @@
 #include "StateQueueMessage.h"
 #include "StateQueueListener.h"
 #include "zmq.hpp"
-#include "sipdb/MongoOpLog.h"
 #include "RedisClientAsync.h"
+#include "SQAExternalPublisher.h"
 
 
 class StateQueueAgent : boost::noncopyable
@@ -45,24 +45,25 @@ public:
   void onIncomingRequest(StateQueueConnection& conn, const char* bytes, std::size_t bytes_transferred);
 
   void handleSignin(StateQueueConnection& conn, StateQueueMessage& message,
-    const std::string& id, const std::string& appId);
+    const std::string& id, const std::string& appId, bool noExternalPublish);
 
   void handleLogout(StateQueueConnection& conn, StateQueueMessage& message,
-    const std::string& id, const std::string& appId);
+    const std::string& id, const std::string& appId, bool noExternalPublish);
 
   void handleEnqueue(StateQueueConnection& conn, StateQueueMessage& message,
     const std::string& id, const std::string& appId);
   void enqueue(StateQueueRecord& record);
 
   void handleEnqueueAndPublish(StateQueueConnection& conn, StateQueueMessage& message,
-    const std::string& id, const std::string& appId);
+    const std::string& id, const std::string& appId, bool noExternalPublish);
 
   void handlePublish(StateQueueConnection& conn, StateQueueMessage& message,
-    const std::string& id, const std::string& appId);
-  void publish(StateQueueRecord& record);
+    const std::string& id, const std::string& appId, bool noExternalPublish);
+
+  void publish(StateQueueRecord& record, bool isExternalConnection, bool noExternalPublish);
 
   void handlePublishAndPersist(StateQueueConnection& conn, StateQueueMessage& message,
-    const std::string& id, const std::string& appId);
+    const std::string& id, const std::string& appId, bool noExternalPublish);
 
   void handlePop(StateQueueConnection& conn, StateQueueMessage& message,
     const std::string& id, const std::string& appId);
@@ -121,11 +122,6 @@ protected:
   void sendErrorResponse(StateQueueMessage::Type type, StateQueueConnection& conn, const std::string& messageId, const std::string& error);
   void sendOkResponse(StateQueueMessage::Type type, StateQueueConnection& conn, const std::string& messageId, const std::string& messageData);
 
-  void onOpLogUpdate(const std::string& opLog);
-  void onOpLogInsert(const std::string& opLog);
-  void onOpLogDelete(const std::string& opLog);
-
-
   void onRedisWatcherEvent(const std::vector<std::string>& event);
   void onRedisWatcherConnect(int status);
   void onRedisWatcherDisconnect(int status);
@@ -137,13 +133,12 @@ protected:
   boost::asio::io_service _ioService;
   TimedQueue _cache;
   StateQueuePublisher _publisher;
+  SQAExternalPublisher _externalPublisher;
   StateQueuePersistence _dataStore;
   unsigned _queueWorkSpaceIndex;
   StateQueueListener _listener;
   int _inactivityThreshold;
   std::string _publisherAddress;
-  MongoOpLog* _pEntityDb;
-  MongoDB::ConnectionInfo* _pEntityDbConnectionInfo;
   boost::thread* _pRedisWatcherThread;
   RedisClientAsync _redisWatcher;
   bool _terminated;

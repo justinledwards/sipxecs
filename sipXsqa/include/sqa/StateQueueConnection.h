@@ -62,6 +62,13 @@ public:
   bool isAlphaConnection() const;
   void setCreationPublished();
   bool isCreationPublished() const;
+
+  void markExternalConnection();
+  /// This connection was made from an external SQA agent
+
+  bool isExternalConnection() const;
+  /// Return true if this connection was made from an external SQA agent
+
 protected:
   void readMore(std::size_t bytes_transferred);
   void startInactivityTimer();
@@ -82,8 +89,9 @@ protected:
   unsigned short _remotePort;
   boost::asio::deadline_timer* _pInactivityTimer;
   std::string _applicationId;
-  bool _isAlphaConnection;
+  bool _isAlphaConnection;  /// true if this connection is used for ping-pong
   bool _isCreationPublished;
+  bool _isExternalConnection; /// true if this connection remote endpoint is an external SQA Agent
 };
 
 
@@ -139,6 +147,16 @@ inline void StateQueueConnection::setCreationPublished()
 inline  bool StateQueueConnection::isCreationPublished() const
 {
   return _isCreationPublished;
+}
+
+inline void StateQueueConnection::markExternalConnection()
+{
+    _isExternalConnection = true;
+}
+
+inline  bool StateQueueConnection::isExternalConnection() const
+{
+    return _isExternalConnection;
 }
 
 #endif	/* STATEQUEUECONNECTION_H */
