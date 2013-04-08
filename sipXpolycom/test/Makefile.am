@@ -10,7 +10,13 @@ noinst_DATA = javac-test
 
 test_PKGS = \
 	$(polycom_PKGS) \
-	sipxconfig-test
+	spring-mock \
+	org.springframework.jdbc \
+	spring-data-mongodb \
+	org.springframework.asm \
+	org.springframework.expression \
+	org.springframework.beans \
+	sipxconfig-test 
 
 test_DEPS = \
 	$(JAVAROOT) \

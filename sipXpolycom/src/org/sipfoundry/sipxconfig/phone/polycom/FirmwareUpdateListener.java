@@ -22,13 +22,21 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.sipfoundry.sipxconfig.common.event.DaoEventListener;
 import org.sipfoundry.sipxconfig.device.DeviceVersion;
+import org.sipfoundry.sipxconfig.phone.Line;
 import org.sipfoundry.sipxconfig.phone.Phone;
 import org.sipfoundry.sipxconfig.phone.PhoneContext;
 import org.sipfoundry.sipxconfig.setting.Group;
 
 public class FirmwareUpdateListener implements DaoEventListener {
+    public static final String SETTING_TRANSPORT_VOIPPROT = "voIpProt/SIP.outboundProxy/transport";
+    public static final String SETTING_TRANSPORT_REG_PROXY = "reg/outboundProxy.transport";
+    public static final String SETTING_TRANSPORT_REG_SERV1 = "reg/server/1/transport";
+    public static final String SETTING_TRANSPORT_REG_SERV2 = "reg/server/2/transport";
+    public static final String TCP_ONLY_40 = "TCPOnly";
+    public static final String TCP_ONLY_32 = "TCPonly";
     private static final Log LOG = LogFactory.getLog(FirmwareUpdateListener.class);
     private static final String GROUP_FW_VERSION = "group.version/firmware.version";
+
     private PhoneContext m_phoneContext;
 
     public void setPhoneContext(PhoneContext phoneContext) {
@@ -60,6 +68,43 @@ public class FirmwareUpdateListener implements DaoEventListener {
                             }
                         }
                     }
+                }
+            }
+        } else if (entity instanceof PolycomPhone) {
+            PolycomPhone phone = (PolycomPhone) entity;
+            String transport = phone.getSettingValue(SETTING_TRANSPORT_VOIPPROT);
+            DeviceVersion ver = phone.getDeviceVersion();
+            if ((ver.equals(PolycomModel.VER_3_2_X) || ver.equals(PolycomModel.VER_3_1_X))
+                    && transport.equals(TCP_ONLY_40)) {
+                phone.setSettingValue(SETTING_TRANSPORT_VOIPPROT, TCP_ONLY_32);
+            } else if ((ver.equals(PolycomModel.VER_4_0_X) || ver.equals(PolycomModel.VER_4_1_X))
+                    && transport.equals(TCP_ONLY_32)) {
+                phone.setSettingValue(SETTING_TRANSPORT_VOIPPROT, TCP_ONLY_40);
+            }
+            for (Line line : phone.getLines()) {
+                String transportReg = line.getSettingValue(SETTING_TRANSPORT_REG_PROXY);
+                if ((ver.equals(PolycomModel.VER_3_2_X) || ver.equals(PolycomModel.VER_3_1_X))
+                        && transportReg.equals(TCP_ONLY_40)) {
+                    line.setSettingValue(SETTING_TRANSPORT_REG_PROXY, TCP_ONLY_32);
+                } else if ((ver.equals(PolycomModel.VER_4_0_X) || ver.equals(PolycomModel.VER_4_1_X))
+                        && transportReg.equals(TCP_ONLY_32)) {
+                    line.setSettingValue(SETTING_TRANSPORT_REG_PROXY, TCP_ONLY_40);
+                }
+                String transportRegServ1 = line.getSettingValue(SETTING_TRANSPORT_REG_SERV1);
+                if ((ver.equals(PolycomModel.VER_3_2_X) || ver.equals(PolycomModel.VER_3_1_X))
+                        && transportRegServ1.equals(TCP_ONLY_40)) {
+                    line.setSettingValue(SETTING_TRANSPORT_REG_SERV1, TCP_ONLY_32);
+                } else if ((ver.equals(PolycomModel.VER_4_0_X) || ver.equals(PolycomModel.VER_4_1_X))
+                        && transportRegServ1.equals(TCP_ONLY_32)) {
+                    line.setSettingValue(SETTING_TRANSPORT_REG_SERV1, TCP_ONLY_40);
+                }
+                String transportRegServ2 = line.getSettingValue(SETTING_TRANSPORT_REG_SERV2);
+                if ((ver.equals(PolycomModel.VER_3_2_X) || ver.equals(PolycomModel.VER_3_1_X))
+                        && transportRegServ2.equals(TCP_ONLY_40)) {
+                    line.setSettingValue(SETTING_TRANSPORT_REG_SERV2, TCP_ONLY_32);
+                } else if ((ver.equals(PolycomModel.VER_4_0_X) || ver.equals(PolycomModel.VER_4_1_X))
+                        && transportRegServ2.equals(TCP_ONLY_32)) {
+                    line.setSettingValue(SETTING_TRANSPORT_REG_SERV2, TCP_ONLY_40);
                 }
             }
         }

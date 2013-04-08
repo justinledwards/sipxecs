@@ -18,6 +18,7 @@ perm="R"#end
 #end
 #end
 #end
+		<ignore_security_warning perm="R">on</ignore_security_warning>
 		<dkey_retrieve perm="R">speed 101</dkey_retrieve>
 
 		<!-- speeddial list -->
@@ -30,7 +31,7 @@ perm="R"#end
 #set ($i = $velocityCount)
 #foreach ($group in $line.Values)
 #foreach ($setting in $group.Values)
-		<${setting.ProfileName} idx="${i}" #perm( $setting )>$!{setting.Value}</${setting.ProfileName}>
+		<${setting.name} idx="${i}" #perm( $setting )>$!{setting.Value}</${setting.name}>
 #end
 #end
 #end
@@ -57,10 +58,42 @@ perm="R"#end
 #set ($context = $key.getSetting('context').Value)
 #set ($type = $key.getSetting('type').Value)
 #set ($number = $key.getSetting('number').Value)
+#set ($i = $velocityCount - 1)    
+#if ($phone.Model.Label=="Snom 300" && $i>=2 && $i<=4 && $number=="" && $context=="active" && $type=="line" )
+#set ($context = "active")
+#set ($type = "keyevent")
+#if ($i==2)
+#set ($number = "F_REDIAL")
+#end
+#if ($i==3)
+#set ($number = "F_ADR_BOOK")
+#end
+#if ($i==4)
+#set ($number = "F_TRANSFER")
+#end
+#if ($i==5)
+#set ($number = "F_MUTE")
+#end
+#end
 #set ($fkeyValue = "$!type $!number")
 #set ($fkeyValue = $fkeyValue.trim())
-#set ($i = $velocityCount - 1)
 		<fkey idx="${i}" context="$context" perm="R">$!fkeyValue</fkey>
 #end
 	</functionKeys>
+	<!-- Retrieving tftp server to provision web-language and language -->
+#set ($ip = $phone.PhoneContext.PhoneDefaults.TftpServer)
+
+        <web-languages>
+#foreach ($file in $webLang)
+		<language url="http://$ip:8090/phone/profile/docroot/snomlang/$file.Version/$file.FileName" name="${file.LangCode}"/>
+#end
+        </web-languages>
+
+        <!-- Snom Language -->
+        <gui-languages>
+#foreach ($file in $guiLang)
+		<language url="http://$ip:8090/phone/profile/docroot/snomlang/$file.Version/$file.FileName" name="${file.LangCode}"/>
+#end
+        </gui-languages>
+
 </settings>
