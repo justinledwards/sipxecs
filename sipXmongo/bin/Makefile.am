@@ -11,54 +11,83 @@ bin_SCRIPTS = \
 
 mongodb_TESTS = \
 	bad-replset \
+	one-node-uninit \
 	two-node-missing-arbiter \
+	two-node-uninitialized \
+	two-node-one-initializing \
+	two-node-one-removed \
 	three-node-unavailable-server \
 	three-node-unhealthy-server \
 	three-node-missing-arbiter-and-database \
 	three-node-missing-database \
 	three-node-healthy
 
-mongodb_admin_TESTS = \
-	t1
+mongodb_admin_primary_COMMANDS = \
+	RESET_LOCAL \
+	OBLITERATE \
+	REPAIR \
+	"RENAME swift.huber.us:27018 new_name:27018" \
+	INITIALIZE \
+	"ADD swift.hubler.us:27018" \
+	"ADD swift.hubler.us:27019"
 
-check : check-mongodb-status check-mongodb-analyzer check-mongodb-admin;
+mongodb_admin_secondary_COMMANDS = \
+	RESET_LOCAL \
+	OBLITERATE
 
-check-mongodb-status:
+mongodb_admin_arbiter_COMMANDS = \
+	RESET_LOCAL \
+	OBLITERATE
+
+check : check-status check-analyzer check-admin;
+
+check-status:
 	@echo "====mongodb-status tests===="
-	for t in $(mongodb_TESTS); do \
-	  echo $(srcdir)/test_data/$$t.status.json; \
-	  $(srcdir)/mongodb-status.in \
-	   --parse < $(srcdir)/test_data/$$t.json > x; \
-	  diff x $(srcdir)/test_data/$$t.status.json || exit 1; \
+	@for t in $(mongodb_TESTS); do \
+	  expected="$(srcdir)/test_data/$$t.status.json"; \
+	  input="$(srcdir)/test_data/$$t.json"; \
+	  echo "EXPECTED $$expected"; \
+	  echo "$(srcdir)/mongodb-status.in --parse < $$input"; \
+	  $(srcdir)/mongodb-status.in --parse < $$input  > actual; \
+	  diff -u actual $$expected || exit 1; \
 	done
 
-check-mongodb-analyzer:
+check-analyzer:
 	@echo "====mongodb-analysis tests===="
-	for t in $(mongodb_TESTS); do \
-	  echo $(srcdir)/test_data/$$t.analysis.json; \
-	  $(srcdir)/mongodb-analyzer.in < $(srcdir)/test_data/$$t.status.json > x; \
-	  diff x $(srcdir)/test_data/$$t.analysis.json || exit 1; \
+	@for t in $(mongodb_TESTS); do \
+	  expected="$(srcdir)/test_data/$$t.analysis.json"; \
+	  input="$(srcdir)/test_data/$$t.status.json"; \
+	  echo "EXPECTED: $$expected"; \
+	  echo "$(srcdir)/mongodb-analyzer.in < $$input"; \
+	  $(srcdir)/mongodb-analyzer.in < $$input > actual; \
+	  diff -u actual $$expected  || exit 1; \
 	done
 
-check-mongodb-admin:
+check-admin:
 	@echo "====mongodb-admin tests===="
-	for t in $(mongodb_admin_TESTS); do \
-	  echo $(srcdir)/test_data/$$t.primary.dryrun; \
-	    $(srcdir)/mongodb-admin.in --host_port swift.hubler.us:27017 --dryrun \
-	      --model $(srcdir)/test_data/admin.model.json < $(srcdir)/test_data/$$t.primary.commands > x; \
-	  diff x $(srcdir)/test_data/$$t.primary.dryrun || exit 1; \
+	@for c in $(mongodb_admin_primary_COMMANDS); do \
+	  expected=$(srcdir)/test_data/`echo -n $$c | sed -e 's/[^a-zA-Z0-9]/_/g'`.primary.dryrun; \
+	  cmd="$(srcdir)/mongodb-admin.in --host_port swift.hubler.us:27017 --dryrun --model $(srcdir)/test_data/admin.model.json $$c"; \
+	  echo "$$cmd"; \
+	  echo "EXPECTED : $$expected"; \
+	  $$cmd > actual; \
+	  diff -u $$expected actual || exit 1; \
 	done
-	for t in $(mongodb_admin_TESTS); do \
-	  echo $(srcdir)/test_data/$$t.secondary.dryrun; \
-	    $(srcdir)/mongodb-admin.in --host_port swift.hubler.us:27019 --dryrun \
-	      --model $(srcdir)/test_data/admin.model.json < $(srcdir)/test_data/$$t.secondary.commands > x; \
-	  diff x $(srcdir)/test_data/$$t.secondary.dryrun || exit 1; \
+	@for c in $(mongodb_admin_secondary_COMMANDS); do \
+	  expected=$(srcdir)/test_data/`echo -n $$c | sed -e 's/[^a-zA-Z0-9]/_/g'`.secondary.dryrun; \
+	  cmd="$(srcdir)/mongodb-admin.in --host_port swift.hubler.us:27019 --dryrun --model $(srcdir)/test_data/admin.model.json $$c"; \
+	  echo "$$cmd"; \
+	  echo "EXPECTED : $$expected"; \
+	  $$cmd > actual; \
+	  diff -u $$expected actual || exit 1; \
 	done
-	for t in $(mongodb_admin_TESTS); do \
-	  echo $(srcdir)/test_data/$$t.arbiter.dryrun; \
-	    $(srcdir)/mongodb-admin.in --host_port swift.hubler.us:27018 --dryrun \
-	      --model $(srcdir)/test_data/admin.model.json < $(srcdir)/test_data/$$t.arbiter.commands > x; \
-	  diff x $(srcdir)/test_data/$$t.arbiter.dryrun || exit 1; \
+	@for c in $(mongodb_admin_arbiter_COMMANDS); do \
+	  expected=$(srcdir)/test_data/`echo -n $$c | sed -e 's/[^a-zA-Z0-9]/_/g'`.arbiter.dryrun; \
+	  cmd="$(srcdir)/mongodb-admin.in --host_port swift.hubler.us:27018 --dryrun --model $(srcdir)/test_data/admin.model.json $$c"; \
+	  echo "$$cmd"; \
+	  echo "EXPECTED : $$expected"; \
+	  $$cmd > actual; \
+	  diff -u $$expected actual || exit 1; \
 	done
 
 initddir = @SIPX_SERVICEDIR@

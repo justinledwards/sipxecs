@@ -1,7 +1,0 @@
-RESET_LOCAL
-OBLITERATE
-REPAIR 
-RENAME swift.huber.us:27018 new_name:27018
-INITIALIZE
-ADD swift.hubler.us:27018
-ADD swift.hubler.us:27019

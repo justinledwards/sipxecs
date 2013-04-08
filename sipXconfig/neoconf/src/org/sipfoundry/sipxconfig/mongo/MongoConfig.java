@@ -26,10 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.sipfoundry.sipxconfig.cfgmgt.CfengineModuleConfiguration;
 import org.sipfoundry.sipxconfig.cfgmgt.ConfigManager;
 import org.sipfoundry.sipxconfig.cfgmgt.ConfigProvider;
@@ -42,10 +39,7 @@ import org.sipfoundry.sipxconfig.feature.FeatureManager;
 import com.mongodb.util.JSON;
 
 public class MongoConfig implements ConfigProvider {
-    private static final Log LOG = LogFactory.getLog(MongoConfig.class);
     private MongoManager m_mongoManager;
-    private MongoReplicaSetManager2 m_mongoReplicateSetManager;
-    private boolean m_incomplete;
 
     @Override
     public void replicate(ConfigManager manager, ConfigRequest request) throws IOException {
@@ -56,13 +50,8 @@ public class MongoConfig implements ConfigProvider {
         Location[] all = manager.getLocationManager().getLocations();
         MongoSettings settings = m_mongoManager.getSettings();
         List<Location> dbs = manager.getFeatureManager().getLocationsForEnabledFeature(MongoManager.FEATURE_ID);
-        List<Location> live = m_mongoReplicateSetManager.getActiveMongoDatabase();
-        if (!CollectionUtils.isEqualCollection(dbs, live)) {
-            m_incomplete = true;
-            LOG.error("mongo client config is incomplete");
-        }
-        String connStr = getConnectionString(live, settings.getPort());
-        String connUrl = getConnectionUrl(live, settings.getPort());
+        String connStr = getConnectionString(dbs, settings.getPort());
+        String connUrl = getConnectionUrl(dbs, settings.getPort());
         for (Location location : all) {
             // CLIENT
             File dir = manager.getLocationDataDirectory(location);
@@ -114,14 +103,6 @@ public class MongoConfig implements ConfigProvider {
             ids.add(l.getFqdn() + ':' + port);
         }
         return ids;
-    }
-
-    public void setMongoReplicateSetManager(MongoReplicaSetManager2 mongoReplicateSetManager) {
-        m_mongoReplicateSetManager = mongoReplicateSetManager;
-    }
-
-    public boolean isIncomplete() {
-        return m_incomplete;
     }
 
     void writeServerConfig(Writer w, boolean mongod, boolean arbiter) throws IOException {

@@ -28,8 +28,8 @@ public interface MongoManager {
     public static final AddressType ARBITOR_ADDRESS_ID = new AddressType(ARBITOR, MongoSettings.ARBITER_PORT);
     public static final LocationFeature FEATURE_ID = new LocationFeature(MONGO);
     public static final LocationFeature ARBITER_FEATURE = new LocationFeature(ARBITOR);
-    public static final AlarmDefinition MONGO_FATAL_REPLICATION_STOP =
-            new AlarmDefinition("MONGO_FATAL_REPLICATION_STOP");
+    public static final AlarmDefinition MONGO_FATAL_REPLICATION_STOP = new AlarmDefinition(
+            "MONGO_FATAL_REPLICATION_STOP");
     public static final AlarmDefinition MONGO_FAILED_ELECTION = new AlarmDefinition("MONGO_FAILED_ELECTION", 1);
     public static final AlarmDefinition MONGO_MEMBER_DOWN = new AlarmDefinition("MONGO_MEMBER_DOWN", 2);
     public static final AlarmDefinition MONGO_NODE_STATE_CHANGED = new AlarmDefinition("MONGO_NODE_STATE_CHANGED");
@@ -37,5 +37,17 @@ public interface MongoManager {
 
     public MongoSettings getSettings();
 
+    public boolean isMisconfigured();
+
     public void saveSettings(MongoSettings settings);
+
+    public MongoMeta getMeta();
+
+    public boolean isInProgress();
+
+    public String addDatabase(String primary, String server);
+
+    public String addArbiter(String primary, String server);
+
+    public String takeAction(String server, String action);
 }

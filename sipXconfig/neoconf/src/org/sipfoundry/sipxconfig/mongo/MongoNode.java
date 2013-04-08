@@ -41,4 +41,12 @@ public class MongoNode {
         int colon = id.indexOf(':');
         return colon > 0 ? id.substring(0, colon) : id;
     }
+
+    public static String arbiterId(String fqdn) {
+        return fqdn + ':' + MongoSettings.ARBITER_PORT;
+    }
+
+    public static String databaseId(String fqdn) {
+        return fqdn + ':' + MongoSettings.SERVER_PORT;
+    }
 }

@@ -89,18 +89,27 @@ class  PrimaryActions:
     def requiredActions(self, meta):
         self.elect_primary = 'NO_PRIMARY' in meta.cluster_states
         self.multi_primary = 'MULTIPLE_PRIMARIES' in meta.cluster_states
-        self.primaries = []
         for host_port, states in meta.server_states.items():
-            if self.elect_primary and 'SECONDARY' in states:
-                meta.requireAction(host_port, 'FORCE_PRIMARY')
+            if self.elect_primary:
+                if 'UNINITIALIZED' in states:
+                    meta.requireAction(host_port, 'INITIALIZE')
+                    continue
+
+                if 'SECONDARY' in states:
+                    meta.requireAction(host_port, 'FORCE_PRIMARY')
+                    continue
+
+            if not self.multi_primary and 'UNINITIALIZED' in states:
+                meta.requireAction(meta.primaries()[0], 'ADD ' + host_port)
+                continue
+
             if 'BAD_REPLSET' in states:
                 meta.requireAction(host_port, 'RESET_LOCAL')
-            elif self.multi_primary and 'PRIMARY' in states:
-                self.primaries.append(host_port)
+                continue
 
         # 2nd pass we option to reset databases
-        if len(self.primaries) > 2:
-            for primary in self.primaries:
+        if len(meta.primaries()) > 2:
+            for primary in meta.primaries():
                 meta.requireAction(primary, 'OBLITERATE')
 
     def availableActions(self, meta):
@@ -112,11 +121,18 @@ class ServerActions:
     def requiredActions(self, meta):
         for host_port, states in meta.server_states.items():
             if 'UNAVAILABLE' in states:
-                    meta.requireAction(host_port, 'START')
+                meta.requireAction(host_port, 'START')
+                continue
+
+            # NOTE: In mongo <= 2.2 you had to restart servers that were removed
+            #   now you just have to wait for few seconds and it get's back in.
+            #if 'REMOVED' in states:
+            #    meta.requireAction(host_port, 'RESTART')
+            #    continue
 
     def availableActions(self, meta):
         for host_port, states in meta.server_states.items():
-            meta.availableAction(host_port, 'RESTART')
+            meta.availableAction(host_port, 'RESTART')                    
 
 action_models.append(ServerActions())
 
@@ -127,9 +143,14 @@ class AddRemoveActions:
             for host_port, states in meta.server_states.items():
                 if 'MISSING' in states:
                     meta.requireAction(primaries[0], 'ADD ' + host_port)
+                    continue
 
     def availableActions(self, meta):
-        pass
+        primaries = meta.primaries()
+        for host_port, states in meta.server_states.items():
+            if len(primaries) == 1 and not 'PRIMARY' in states:
+                if len(meta.server_states) > 1:
+                    meta.availableAction(primaries[0], 'REMOVE ' + host_port)
 
 action_models.append(AddRemoveActions())
 

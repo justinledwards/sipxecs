@@ -16,10 +16,11 @@
  */
 package org.sipfoundry.sipxconfig.site.mongo;
 
-
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.StringUtils;
@@ -39,13 +40,15 @@ import org.sipfoundry.sipxconfig.components.PageWithCallback;
 import org.sipfoundry.sipxconfig.components.SelectMap;
 import org.sipfoundry.sipxconfig.components.SipxValidationDelegate;
 import org.sipfoundry.sipxconfig.feature.FeatureManager;
-import org.sipfoundry.sipxconfig.mongo.MongoAction;
-import org.sipfoundry.sipxconfig.mongo.MongoAdmin;
 import org.sipfoundry.sipxconfig.mongo.MongoManager;
+import org.sipfoundry.sipxconfig.mongo.MongoMeta;
 import org.sipfoundry.sipxconfig.mongo.MongoNode;
-import org.sipfoundry.sipxconfig.mongo.MongoReplicaSetManager2;
+import org.sipfoundry.sipxconfig.mongo.MongoSettings;
 
 public abstract class ManageMongo extends PageWithCallback implements PageBeginRenderListener {
+    private enum Action {
+        ADD_ARBITER, ADD_DATABASE
+    }
     public static final String PAGE = "mongo/ManageMongo";
 
     @Bean
@@ -60,12 +63,9 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
     @InjectObject("spring:mongoManager")
     public abstract MongoManager getMongoManager();
 
-    public abstract void setAdmin(MongoAdmin admin);
+    public abstract MongoMeta getMeta();
 
-    public abstract MongoAdmin getAdmin();
-
-    @InjectObject("spring:mongoReplicaSetManager2")
-    public abstract MongoReplicaSetManager2 getMongoReplicaSetManager2();
+    public abstract void setMeta(MongoMeta meta);
 
     public abstract MongoNode getNode();
 
@@ -132,7 +132,7 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
         Object[] params = cycle.getListenerParameters();
         String serverId = params[0].toString();
         String action = params[1].toString();
-        String response = getAdmin().takeAction(serverId, action);
+        String response = getMongoManager().takeAction(serverId, action);
         String msg;
         if (response == null) {
             msg = "operation working on the background";
@@ -159,7 +159,7 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
     public abstract String getCurrentServerAction();
 
     public Collection<String> getServerActions() {
-        return Arrays.asList(new String[] {"add arbiter", "add database"});
+        return Arrays.asList(new String[] {Action.ADD_ARBITER.toString(), Action.ADD_DATABASE.toString()});
     }
 
     public boolean isServerActionSelected() {
@@ -184,30 +184,34 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
         }
 
         return getUnknownIcon();
-        // case STARTUP1:
-        // return getUnconfiguredIcon();
-        // case STARTUP2:
-        // return getLoadingIcon();
-        // case UNAVAILABLE:
-        // return getStoppedIcon();
-        // default:
-        // return getErrorIcon();
-        // }
     }
 
     @Override
     public void pageBeginRender(PageEvent arg0) {
-        if (getAdmin() == null) {
+        if (getMeta() == null) {
             initializePage();
         }
     }
 
     void initializePage() {
-        setAdmin(getMongoReplicaSetManager2().getMongoAdmin());
+        MongoManager manager = getMongoManager();
+        MongoMeta meta = manager.getMeta();
+        setMeta(meta);
         List<Location> l = getLocationsManager().getLocationsList();
+
+        // Determine list of only servers that can fit another db component
         @SuppressWarnings("unchecked")
-        Collection<String> names = CollectionUtils.collect(l, Location.GET_HOSTNAME);
-        setServerNames(names);
+        Collection<String> all = CollectionUtils.collect(l, Location.GET_HOSTNAME);
+        Set<String> available = new HashSet<String>(all);
+        Set<String> nodes = new HashSet<String>(meta.getServers());
+        for (String fqdn : all) {
+            if (nodes.contains(fqdn + ':' + MongoSettings.ARBITER_PORT)) {
+                if (nodes.contains(fqdn + ':' + MongoSettings.ARBITER_PORT)) {
+                    available.remove(fqdn);
+                }
+            }
+        }
+        setServerNames(available);
     }
 
     public void refresh() {
@@ -220,9 +224,21 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
             String server = getServerName();
             if (StringUtils.isBlank(server)) {
                 getValidator().record(new UserException("&error.selectServer"), getMessages());
+                return;
             }
-            MongoAction action = MongoAction.valueOf(serverAction);
-            getMongoReplicaSetManager2().takeAction(action, server);
+            Action action = Action.valueOf(serverAction);
+            MongoNode primary = getMeta().getPrimary();
+            if (primary == null) {
+                getValidator().record(new UserException("&error.noPrimary"), getMessages());
+                return;
+            }
+            String primaryServer = primary.getId();
+            if (action == Action.ADD_ARBITER) {
+                getMongoManager().addArbiter(primaryServer, server);
+            } else if (action == Action.ADD_DATABASE) {
+                getMongoManager().addDatabase(primaryServer, server);
+            }
+
             getValidator().recordSuccess("congrats, you pressed " + serverAction + " for " + server);
         }
     }
@@ -235,7 +251,7 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
                 if (arg0 instanceof MongoNode) {
                     return arg0;
                 } else if (arg0 instanceof String) {
-                    return getAdmin().getNode((String) arg0);
+                    return getMeta().getNode((String) arg0);
                 }
                 return null;
             }

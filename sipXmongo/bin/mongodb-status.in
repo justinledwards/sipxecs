@@ -67,10 +67,24 @@ class CheckHostnameOrMissingConfig:
             if not host_meta['available']:
                 logging.debug(host_meta)
                 meta.states[host].append('UNAVAILABLE')
-            elif config == None:
+                continue
+            if config == None:
+                if status and 'status' in status:
+                    if 'startupStatus' in status['status']:
+                        if 3 == status['status']['startupStatus']:
+                            meta.states[host].append('UNINITIALIZED')
+                            continue
+
+                # Treat removed as a special case of missing
+                #if status and 'stateStr' in status and 'REMOVED' == status['stateStr']:
+                #    continue
+
                 meta.states[host].append('MISSING')
-            elif 'host' in config and config['host'] != host:
+                continue
+
+            if 'host' in config and config['host'] != host:
                 meta.states[host].append('HOSTNAME_MISMATCH')
+                continue
 
 analyzers.append(CheckHostnameOrMissingConfig())
 
@@ -91,14 +105,9 @@ class CheckRole:
     def analyze(self, meta):        
         for host, host_meta in meta.meta['meta'].items():
            status, config = meta.member(host)
-           stype = meta.nodeType(host)
-           if stype == 'arbiters':
-               meta.states[host].append('ARBITER')
-           else:
-               if status and status['stateStr'] == 'PRIMARY':
-                   meta.states[host].append('PRIMARY')
-               else:
-                   meta.states[host].append('SECONDARY')
+           if status and 'stateStr' in status:
+               logging.debug('Sticking in ' + status['stateStr'])
+               meta.states[host].append(status['stateStr'])
 
 analyzers.append(CheckRole())
 
@@ -135,6 +144,11 @@ class MongoMeta:
             for host, config in self.configMembers(myConfig):
                 return status, config
             return status, None
+        # check for status object in uninitialized where config is null but status
+        # still contains useful info
+        if host in self.meta['meta']:
+            logging.debug('here')
+            return self.meta['meta'][host], None
         return None, None
 
     def _configOrStatus(self, predicate, config_or_status):

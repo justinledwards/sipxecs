@@ -12,20 +12,17 @@
  * FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
  * details.
  */
-package org.sipfoundry.sipxconfig.mongo;
+package org.sipfoundry.sipxconfig.common;
 
-// if you update this, you may need to also update string resource labels in ManageMongo.properties
-public enum MongoAction {
-    RESTART_DATABASE,
-    RESTART_ARBITER,
-    REMOVE_DATABASE,
-    REMOVE_ARBITER,
-    STEP_DOWN,
-    ADD_DATABASE,
-    ADD_ARBITER,
-    INITIALIZE,
-    CLEAR_LOCAL,
-    CLEAR_ARBITER,
-    FORCE_PRIMARY,
-    RESET_BAD_HOSTNAMES
+public interface CommandRunner {
+
+    public boolean run();
+
+    public boolean isInProgress();
+
+    public String getStdout();
+
+    public String getStderr();
+
+    public Integer getExitCode();
 }

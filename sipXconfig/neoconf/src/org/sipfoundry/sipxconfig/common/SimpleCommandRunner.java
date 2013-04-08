@@ -31,7 +31,7 @@ import org.apache.commons.logging.LogFactory;
  * Run commands and allow caller to block for a specific time and unblock for
  * a specific remaining time before killing process.
  */
-public class SimpleCommandRunner {
+public class SimpleCommandRunner implements CommandRunner {
     private static final Log LOG = LogFactory.getLog(SimpleCommandRunner.class);
     private ByteArrayOutputStream m_stderr;
     private ByteArrayOutputStream m_stdout;
@@ -41,6 +41,9 @@ public class SimpleCommandRunner {
     private Thread m_errThread;
     private Thread m_procThread;
     private volatile Integer m_exitCode;
+    private String[] m_command;
+    private int m_foregroundTimeout;
+    private int m_backgroundTimeout;
 
     public String getStderr() {
         return m_stderr.toString();
@@ -66,11 +69,22 @@ public class SimpleCommandRunner {
         return m_procThread != null && m_procThread.isAlive();
     }
 
-    public boolean run(String[] command, final int foregroundTimeout) {
+    public void setRunParameters(String[] command, int foregroundTimeout, int backgroundTimeout) {
+        m_command = command;
+        m_foregroundTimeout = foregroundTimeout;
+        m_backgroundTimeout = backgroundTimeout;
+    }
+
+    public boolean run(String[] command, int foregroundTimeout) {
         return run(command, foregroundTimeout, 0);
     }
 
-    public boolean run(String[] command, final int foregroundTimeout, final int backgroundTimeout) {
+    public boolean run(String[] command, int foregroundTimeout, int backgroundTimeout) {
+        setRunParameters(command, foregroundTimeout, backgroundTimeout);
+        return run();
+    }
+
+    public boolean run() {
         // clean-up in case this is reused
         kill();
         m_stderr = new ByteArrayOutputStream();
@@ -78,9 +92,9 @@ public class SimpleCommandRunner {
         m_exitCode = null;
         m_inThread = null;
 
-        final String fullCommand = StringUtils.join(command, ' ');
+        final String fullCommand = StringUtils.join(m_command, ' ');
         LOG.info(fullCommand);
-        ProcessBuilder pb = new ProcessBuilder(Arrays.asList(command));
+        ProcessBuilder pb = new ProcessBuilder(Arrays.asList(m_command));
         try {
             final Process p = pb.start();
             if (m_stdin != null) {
@@ -114,13 +128,15 @@ public class SimpleCommandRunner {
                         m_exitCode = p.waitFor();
                     } catch (InterruptedException willBeHandledByReaper) {
                         LOG.error("Interrupted running " + fullCommand);
+                    } finally {
+                        SimpleCommandRunner.this.notifyAll();
                     }
                 }
             };
             m_procThread = new Thread(null, procRunner, "CommandRunner-process");
             m_procThread.start();
 
-            m_procThread.join(foregroundTimeout);
+            m_procThread.join(m_foregroundTimeout);
 
             // all ok
             if (m_exitCode != null) {
@@ -128,13 +144,13 @@ public class SimpleCommandRunner {
             }
 
             // not requested to go into background
-            if (backgroundTimeout <= foregroundTimeout) {
+            if (m_backgroundTimeout <= m_foregroundTimeout) {
                 LOG.info("background timer not specified or valid, killing process " + fullCommand);
                 kill();
                 return false;
             }
 
-            final int remainingTime = backgroundTimeout - foregroundTimeout;
+            final int remainingTime = m_backgroundTimeout - m_foregroundTimeout;
             LOG.info("putting process in background for " + remainingTime + " ms " + fullCommand);
             // schedule process to be killed after background timeout
             Runnable reaper = new Runnable() {
@@ -154,6 +170,10 @@ public class SimpleCommandRunner {
             };
             Thread reaperThread = new Thread(null, reaper, "CommandRunner-reaper");
             reaperThread.start();
+
+            // just in case notify from finishing process didn't get called
+            notifyAll();
+
             return false;
         } catch (IOException e) {
             throw new UserException(e);

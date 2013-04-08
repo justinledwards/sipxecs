@@ -41,8 +41,16 @@
 		</ul>
      </span>
      <span jwcid="actionColumnValue@Block">
+     	Required
      	<ul>
-			<span jwcid="@For" source="ognl:admin.getActions(node.id)" value="ognl:action">
+			<span jwcid="@For" source="ognl:admin.getRequiredActions(node.id)" value="ognl:action">
+	            <li><input jwcid="@Submit" id="mongo:action" value="ognl:localizedAction" 
+	              listener="listener:onSpecificServerAction" parameters="ognl:{node.id, action}"/><li>
+			</span>
+		</ul>
+		Available
+     	<ul>
+			<span jwcid="@For" source="ognl:admin.getAvailableActions(node.id)" value="ognl:action">
 	            <li><input jwcid="@Submit" id="mongo:action" value="ognl:localizedAction" 
 	              listener="listener:onSpecificServerAction" parameters="ognl:{node.id, action}"/><li>
 			</span>

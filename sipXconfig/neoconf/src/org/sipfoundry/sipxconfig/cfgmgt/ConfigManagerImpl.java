@@ -78,6 +78,7 @@ public class ConfigManagerImpl implements AddressProvider, ConfigManager, BeanFa
     private Set<String> m_registeredIps;
     private boolean m_postSetup;
     private final Object m_lock = new Object();
+    private String m_remoteCommand = "/usr/bin/ssh -i %s/.cfagent/ppkeys/localhost.nopass.priv root@%s";
     private boolean m_flag;
 
     @Override
@@ -96,7 +97,7 @@ public class ConfigManagerImpl implements AddressProvider, ConfigManager, BeanFa
 
     public String getRemoteCommand(String server) {
         String home = System.getProperty("user.home");
-        return String.format("/usr/bin/ssh -i %s/.cfagent/ppkeys/localhost.nopass.priv root@%s", home, server);
+        return String.format(m_remoteCommand, home, server);
 
     }
 
@@ -433,6 +434,10 @@ public class ConfigManagerImpl implements AddressProvider, ConfigManager, BeanFa
 
     public void setUploadDir(String uploadDir) {
         m_uploadDir = uploadDir;
+    }
+
+    public void setRemoteCommand(String remoteCommand) {
+        m_remoteCommand = remoteCommand;
     }
 
     @Override

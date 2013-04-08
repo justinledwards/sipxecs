@@ -1,12 +1,10 @@
 {
     "states": {
         "swift.hubler.us:27018": [
-            "MISSING",
-            "ARBITER"
+            "MISSING"
         ],
         "swift.hubler.us:27019": [
-            "MISSING",
-            "SECONDARY"
+            "MISSING"
         ],
         "swift.hubler.us:27017": [
             "PRIMARY"

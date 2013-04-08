@@ -1,0 +1,19 @@
+{
+    "available": {
+        "swift.hubler.us:27001": [
+            "RESTART",
+            "REMOVE swift.hubler.us:27001"
+        ],
+        "swift.hubler.us:27000": [
+            "RESTART"
+        ]
+    },
+    "model": {
+        "replSet": "sipxecs",
+        "servers": [
+            "swift.hubler.us:27000",
+            "swift.hubler.us:27001"
+        ]
+    },
+    "required": {}
+}
