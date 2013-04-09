@@ -16,7 +16,7 @@
  */
 package org.sipfoundry.sipxconfig.site.mongo;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -28,16 +28,17 @@ import org.apache.tapestry.IAsset;
 import org.apache.tapestry.IRequestCycle;
 import org.apache.tapestry.annotations.Asset;
 import org.apache.tapestry.annotations.Bean;
-import org.apache.tapestry.annotations.InitialValue;
 import org.apache.tapestry.annotations.InjectObject;
 import org.apache.tapestry.components.IPrimaryKeyConverter;
 import org.apache.tapestry.event.PageBeginRenderListener;
 import org.apache.tapestry.event.PageEvent;
+import org.apache.tapestry.form.IPropertySelectionModel;
+import org.apache.tapestry.form.StringPropertySelectionModel;
 import org.sipfoundry.sipxconfig.common.UserException;
 import org.sipfoundry.sipxconfig.commserver.Location;
 import org.sipfoundry.sipxconfig.commserver.LocationsManager;
+import org.sipfoundry.sipxconfig.components.ExtraOptionModelDecorator;
 import org.sipfoundry.sipxconfig.components.PageWithCallback;
-import org.sipfoundry.sipxconfig.components.SelectMap;
 import org.sipfoundry.sipxconfig.components.SipxValidationDelegate;
 import org.sipfoundry.sipxconfig.feature.FeatureManager;
 import org.sipfoundry.sipxconfig.mongo.MongoManager;
@@ -46,10 +47,9 @@ import org.sipfoundry.sipxconfig.mongo.MongoNode;
 import org.sipfoundry.sipxconfig.mongo.MongoSettings;
 
 public abstract class ManageMongo extends PageWithCallback implements PageBeginRenderListener {
-    private enum Action {
-        ADD_ARBITER, ADD_DATABASE
-    }
     public static final String PAGE = "mongo/ManageMongo";
+
+    private static final String DELETE = "_DELETE";
 
     @Bean
     public abstract SipxValidationDelegate getValidator();
@@ -75,16 +75,6 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
 
     public abstract String getMongoAction();
 
-    @Bean
-    public abstract SelectMap getSelections();
-
-    @Bean
-    public abstract SelectMap getMongoSelections();
-
-    public Collection< ? > getAllSelected() {
-        return getSelections().getAllSelected();
-    }
-
     @Asset("/images/server.png")
     public abstract IAsset getServerIcon();
 
@@ -106,27 +96,27 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
     @Asset("/images/loading.png")
     public abstract IAsset getLoadingIcon();
 
-    @InitialValue(value = "literal:")
-    public abstract String getServerName();
+    public abstract String getAddDb();
 
-    public abstract void setServerName(String name);
+    public abstract void setAddDb(String server);
 
-    public abstract String getCurrentServerName();
+    public abstract String getAddArbiter();
+
+    public abstract void setAddArbiter(String server);
 
     public abstract void setNodes(List<MongoNode> status);
 
-    public abstract void setServerNames(Collection<String> names);
+    public abstract IPropertySelectionModel getAddDbModel();
 
-    public boolean isServerNameSelected() {
-        // effectively clears form every refresh
-        return false;
-    }
+    public abstract void setAddDbModel(IPropertySelectionModel model);
 
-    public void setServerNameSelected(boolean yes) {
-        if (yes) {
-            setServerName(getCurrentServerName());
-        }
-    }
+    public abstract IPropertySelectionModel getAddArbiterModel();
+
+    public abstract void setAddArbiterModel(IPropertySelectionModel model);
+
+    public abstract String getAvailableAction();
+
+    public abstract void setAvailableAction(String action);
 
     public void onSpecificServerAction(IRequestCycle cycle) {
         Object[] params = cycle.getListenerParameters();
@@ -151,26 +141,16 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
         return getStatus();
     }
 
-    @InitialValue(value = "literal:")
-    public abstract String getServerAction();
-
-    public abstract void setServerAction(String action);
-
-    public abstract String getCurrentServerAction();
-
-    public Collection<String> getServerActions() {
-        return Arrays.asList(new String[] {Action.ADD_ARBITER.toString(), Action.ADD_DATABASE.toString()});
-    }
-
-    public boolean isServerActionSelected() {
-        // effectively clears form every refresh
-        return false;
-    }
-
-    public void setServerActionSelected(boolean yes) {
-        if (yes) {
-            setServerAction(getCurrentServerAction());
-        }
+    public IPropertySelectionModel getAvailableActionModel() {
+        Collection<String> raw = getMeta().getAvailableActions(getNode().getHostPort());
+        List<String> actions = new ArrayList<String>(raw);
+        actions.add(DELETE);
+        IPropertySelectionModel m = new StringPropertySelectionModel(actions.toArray(new String[0]));
+        ExtraOptionModelDecorator e = new ExtraOptionModelDecorator();
+        e.setExtraLabel("actions...");
+        e.setExtraOption(null);
+        e.setModel(m);
+        return e;
     }
 
     public IAsset getStatusAsset() {
@@ -202,16 +182,36 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
         // Determine list of only servers that can fit another db component
         @SuppressWarnings("unchecked")
         Collection<String> all = CollectionUtils.collect(l, Location.GET_HOSTNAME);
-        Set<String> available = new HashSet<String>(all);
+        List<String> addArbiters = new ArrayList<String>();
+        List<String> addDatabases = new ArrayList<String>();
         Set<String> nodes = new HashSet<String>(meta.getServers());
         for (String fqdn : all) {
-            if (nodes.contains(fqdn + ':' + MongoSettings.ARBITER_PORT)) {
-                if (nodes.contains(fqdn + ':' + MongoSettings.ARBITER_PORT)) {
-                    available.remove(fqdn);
-                }
+            if (!nodes.contains(fqdn + ':' + MongoSettings.ARBITER_PORT)) {
+                addArbiters.add(fqdn);
+            }
+            if (!nodes.contains(fqdn + ':' + MongoSettings.SERVER_PORT)) {
+                addDatabases.add(fqdn);
             }
         }
-        setServerNames(available);
+
+        String[] arbs = addArbiters.toArray(new String[0]);
+        ExtraOptionModelDecorator arbM = new ExtraOptionModelDecorator();
+        arbM.setModel(new StringPropertySelectionModel(arbs));
+        arbM.setExtraLabel("Add arbiter...");
+        arbM.setExtraOption(null);
+        setAddArbiterModel(arbM);
+
+        String[] dbs = addDatabases.toArray(new String[0]);
+        ExtraOptionModelDecorator dbM = new ExtraOptionModelDecorator();
+        dbM.setModel(new StringPropertySelectionModel(dbs));
+        dbM.setExtraLabel("Add database...");
+        dbM.setExtraOption(null);
+        setAddDbModel(dbM);
+
+        // clear these form values on page reload
+        setAvailableAction(null);
+        setAddArbiter(null);
+        setAddDb(null);
     }
 
     public void refresh() {
@@ -219,28 +219,56 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
     }
 
     public void takeAction() {
-        String serverAction = getServerAction();
-        if (StringUtils.isNotBlank(serverAction)) {
-            String server = getServerName();
-            if (StringUtils.isBlank(server)) {
-                getValidator().record(new UserException("&error.selectServer"), getMessages());
-                return;
+        String addDb = getAddDb();
+        String addArbiter = getAddArbiter();
+        if (StringUtils.isNotBlank(addDb) || StringUtils.isNotBlank(addArbiter)) {
+            MongoNode primary = requirePrimary();
+            if (primary != null) {
+                if (StringUtils.isNotBlank(addDb)) {
+                    String hostPort = MongoNode.databaseHostPort(addDb);
+                    getMongoManager().addDatabase(primary.getHostPort(), hostPort);
+                } else if (StringUtils.isNotBlank(addArbiter)) {
+                    String hostPort = MongoNode.arbiterHostPort(addArbiter);
+                    getMongoManager().addArbiter(primary.getHostPort(), hostPort);
+                }
+                getValidator().recordSuccess("Service is being added.");
             }
-            Action action = Action.valueOf(serverAction);
-            MongoNode primary = getMeta().getPrimary();
-            if (primary == null) {
-                getValidator().record(new UserException("&error.noPrimary"), getMessages());
-                return;
-            }
-            String primaryServer = primary.getId();
-            if (action == Action.ADD_ARBITER) {
-                getMongoManager().addArbiter(primaryServer, server);
-            } else if (action == Action.ADD_DATABASE) {
-                getMongoManager().addDatabase(primaryServer, server);
-            }
-
-            getValidator().recordSuccess("congrats, you pressed " + serverAction + " for " + server);
         }
+
+        String action = getAvailableAction();
+        if (StringUtils.isNotBlank(action)) {
+            MongoNode node = getNode();
+            String fqdn = getNode().getFqdn();
+            String result = null;
+            if (action == DELETE) {
+                MongoNode primary = requirePrimary();
+                if (primary != null) {
+                    if (node.isArbiter()) {
+                        getMongoManager().removeArbiter(primary.getHostPort(), getNode().getHostPort());
+                    } else {
+                        getMongoManager().removeDatabase(primary.getHostPort(), getNode().getHostPort());
+                    }
+                }
+            } else {
+                result = getMongoManager().takeAction(fqdn, action);
+            }
+            if (result == null) {
+                getValidator().recordSuccess("Operation performed.");
+            } else {
+                getValidator().recordSuccess("Operation is running in background.");
+            }
+        }
+
+        // might need this.
+        // initializePage();
+    }
+
+    MongoNode requirePrimary() {
+        MongoNode primary = getMeta().getPrimary();
+        if (primary == null) {
+            getValidator().record(new UserException("&error.noPrimary"), getMessages());
+        }
+        return primary;
     }
 
     public IPrimaryKeyConverter getConverter() {
@@ -260,7 +288,7 @@ public abstract class ManageMongo extends PageWithCallback implements PageBeginR
             public Object getPrimaryKey(Object arg0) {
                 if (arg0 instanceof MongoNode) {
                     MongoNode mongo = (MongoNode) arg0;
-                    return mongo.getId();
+                    return mongo.getHostPort();
                 }
                 return null;
             }

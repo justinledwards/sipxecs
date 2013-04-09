@@ -3,9 +3,6 @@
         "swift.hubler.us:27018": [
             "RESTART"
         ],
-        "swift.hubler.us:27019": [
-            "RESTART"
-        ],
         "swift.hubler.us:27017": [
             "RESTART"
         ]
@@ -16,14 +13,15 @@
         ],
         "replSet": "sipxecs",
         "servers": [
-            "swift.hubler.us:27017",
-            "swift.hubler.us:27019"
+            "swift.hubler.us:27017"
         ]
     },
     "required": {
+        "swift.hubler.us:27018": [
+            "RESET_LOCAL"
+        ],
         "swift.hubler.us:27017": [
-            "ADD swift.hubler.us:27018",
-            "ADD swift.hubler.us:27019"
+            "ADD swift.hubler.us:27018"
         ]
     }
 }

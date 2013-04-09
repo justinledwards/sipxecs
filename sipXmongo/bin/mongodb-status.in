@@ -61,13 +61,14 @@ class CheckReplSet:
 analyzers.append(CheckReplSet())
 
 class CheckHostnameOrMissingConfig:
-    def analyze(self, meta):        
+    def analyze(self, meta):
+        primary_config = meta.primaryConfig()
         for host, host_meta in meta.meta['meta'].items():
             status, config = meta.member(host)
             if not host_meta['available']:
-                logging.debug(host_meta)
                 meta.states[host].append('UNAVAILABLE')
                 continue
+
             if config == None:
                 if status and 'status' in status:
                     if 'startupStatus' in status['status']:
@@ -86,14 +87,25 @@ class CheckHostnameOrMissingConfig:
                 meta.states[host].append('HOSTNAME_MISMATCH')
                 continue
 
+            # setup to check that each host is in primary config's members as
+            # you could have all healthy servers, but none configures to talk
+            # with each other
+            if primary_config:
+                if 'members' in primary_config:
+                    found = False
+                    for m in primary_config['members']:
+                        if 'host' in m and m['host'] == host:
+                            found = True
+                            break
+                    if not found:
+                        meta.states[host].append('MISSING')
+                        continue
+
 analyzers.append(CheckHostnameOrMissingConfig())
 
 class CheckPrimaries:
     def analyze(self, meta):        
-        primaries = Set()        
-        findPrimaries = lambda host, status: status['stateStr'] == 'PRIMARY'
-        for host, status in meta.statusMembers(findPrimaries):
-            primaries.add(status['name'])
+        primaries = meta.primaries()
         if len(primaries) == 0:
             meta.cluster_states.append('NO_PRIMARY')
         if len(primaries) > 1:
@@ -106,10 +118,26 @@ class CheckRole:
         for host, host_meta in meta.meta['meta'].items():
            status, config = meta.member(host)
            if status and 'stateStr' in status:
-               logging.debug('Sticking in ' + status['stateStr'])
                meta.states[host].append(status['stateStr'])
 
 analyzers.append(CheckRole())
+
+class CheckConfigVersion:
+    def analyze(self, meta):        
+        primary_config = meta.primaryConfig()
+        if not primary_config or 'version' not in primary_config:
+            return
+        logging.debug(primary_config);
+        
+        for host, host_meta in meta.meta['meta'].items():
+            if 'config' in host_meta and host_meta['config']:
+                if 'version' in host_meta['config']:
+                    logging.debug(host_meta['config']['version']);
+                    if host_meta['config']['version'] > primary_config['version']:
+                        meta.states[host].append('BAD_CONFIG_VERSION')
+                        continue
+
+analyzers.append(CheckConfigVersion())
 
 
 class MongoMeta:
@@ -147,7 +175,6 @@ class MongoMeta:
         # check for status object in uninitialized where config is null but status
         # still contains useful info
         if host in self.meta['meta']:
-            logging.debug('here')
             return self.meta['meta'][host], None
         return None, None
 
@@ -159,6 +186,27 @@ class MongoMeta:
                         if predicate(host, member):
                             yield host, member
         return
+
+    def primaries(self):
+        primaries = Set()
+        finder = lambda host, status: status['stateStr'] == 'PRIMARY'
+        for host, status in self.statusMembers(finder):
+            primaries.add(status['name'])
+        return list(primaries)
+
+    def primary(self):
+        primaries = self.primaries();
+        if len(primaries) == 1:
+            return primaries[0]
+        return None
+
+    def primaryConfig(self):
+        primary_name = self.primary()
+        if primary_name:
+            if primary_name in self.meta['meta']:
+                if 'config' in self.meta['meta'][primary_name]:
+                    return self.meta['meta'][primary_name]['config']
+        return None
 
 class MongoAdmin:
     def dump(self, model_file):

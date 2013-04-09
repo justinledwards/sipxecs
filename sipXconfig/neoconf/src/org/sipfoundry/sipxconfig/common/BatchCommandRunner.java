@@ -63,12 +63,15 @@ public class BatchCommandRunner implements CommandRunner {
 
     public boolean run() {
         m_runner = new Thread() {
+            @Override
             public void run() {
                 Integer exitCode = null;
                 for (CommandRunner job : m_runners) {
                     if (!job.run()) {
                         try {
-                            job.wait();
+                            synchronized (job) {
+                                job.wait();
+                            }
                         } catch (InterruptedException e) {
                             LOG.error(e);
                         }
@@ -83,41 +86,53 @@ public class BatchCommandRunner implements CommandRunner {
                         break;
                     }
                 }
-                BatchCommandRunner.this.notifyAll();
+                synchronized (BatchCommandRunner.this) {
+                    BatchCommandRunner.this.notifyAll();
+                }
                 m_exitCode = exitCode;
             };
         };
         m_runner.start();
         try {
-            m_runner.wait(m_foregroundTimeout);
-            return true;
+            synchronized (m_runner) {
+                m_runner.join(m_foregroundTimeout);
+                if (m_exitCode != null) {
+                    return true;
+                }
+            }
         } catch (InterruptedException e) {
             LOG.error(e);
         }
 
         final int remainingTime = m_backgroundTimeout - m_foregroundTimeout;
-        LOG.info("putting " + m_label + " batch process in background for " + remainingTime + " ms");
-        // schedule process to be killed after background timeout
-        Runnable reaper = new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    // already waited foreground, so subtract that off
-                    m_runner.join(remainingTime);
-                    if (m_exitCode == null) {
-                        LOG.info("Reaping " + m_label + " background process, did not complete in time.");
-                        kill();
+        if (remainingTime > 0) {
+            LOG.info("putting " + m_label + " batch process in background for " + remainingTime + " ms");
+            // schedule process to be killed after background timeout
+            Runnable reaper = new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        // already waited foreground, so subtract that off
+                        m_runner.join(remainingTime);
+                        if (m_exitCode == null) {
+                            LOG.info("Reaping " + m_label + " background process, did not complete in time.");
+                            kill();
+                        }
+                    } catch (InterruptedException e) {
+                        throw new UserException(e);
                     }
-                } catch (InterruptedException e) {
-                    throw new UserException(e);
                 }
-            }
-        };
-        Thread reaperThread = new Thread(null, reaper, "BatchCommandRunner-reaper");
-        reaperThread.start();
+            };
+            Thread reaperThread = new Thread(null, reaper, "BatchCommandRunner-reaper");
+            reaperThread.start();
+        } else {
+            kill();
+        }
 
         // just in case notify from finishing process didn't get called
-        notifyAll();
+        synchronized (this) {
+            notifyAll();
+        }
 
         return false;
     }

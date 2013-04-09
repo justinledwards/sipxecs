@@ -103,7 +103,7 @@ class  PrimaryActions:
                 meta.requireAction(meta.primaries()[0], 'ADD ' + host_port)
                 continue
 
-            if 'BAD_REPLSET' in states:
+            if 'BAD_REPLSET' in states or 'BAD_CONFIG_VERSION' in states:
                 meta.requireAction(host_port, 'RESET_LOCAL')
                 continue
 
@@ -144,13 +144,12 @@ class AddRemoveActions:
                 if 'MISSING' in states:
                     meta.requireAction(primaries[0], 'ADD ' + host_port)
                     continue
+                if len(meta.server_states) > 1:
+                    if host_port not in meta.server_states:
+                        meta.requireAction(primaries[0], 'REMOVE ' + host_port)
 
     def availableActions(self, meta):
-        primaries = meta.primaries()
-        for host_port, states in meta.server_states.items():
-            if len(primaries) == 1 and not 'PRIMARY' in states:
-                if len(meta.server_states) > 1:
-                    meta.availableAction(primaries[0], 'REMOVE ' + host_port)
+        pass
 
 action_models.append(AddRemoveActions())
 

@@ -134,13 +134,16 @@ def initializedCheck(status):
 
 class MongoRSAdmin:
     def __init__(self, model_file, host_port, dryrun):
-        meta = json.load(open(model_file))
-        # Allow reading of the model from output of mongodb-analyzer or a
-        # straight model file that would have been fed into mongodb-status --model file
-        if 'model' in meta:
-            self.model = meta['model']
+        if type(model_file) == dict:
+            self.model = model_file
         else:
-            self.model = meta
+            meta = json.load(open(model_file))
+            # Allow reading of the model from output of mongodb-analyzer or a
+            # straight model file that would have been fed into mongodb-status --model file
+            if 'model' in meta:
+                self.model = meta['model']
+            else:
+                self.model = meta
         self.host_port = host_port
         self.dryrun = dryrun
         self.timeout = 0
@@ -430,8 +433,10 @@ if __name__ == '__main__':
                 help='verbose output')
     parser.add_argument('--dryrun', action="store_true", default=False,
                 help='Do not actually execute any commands')
-    parser.add_argument('--host_port', metavar="name", required=True,
+    parser.add_argument('--host_port', metavar="name", default=None,
                 help='Mongo server host to run operations on')
+    parser.add_argument('--obliterate', action="store_true", default=False,
+                help='Force the obliteration on the local database. Tip: use OBLITERATE command to obliterate arbiter db.')
     parser.add_argument('--model', metavar="name", default="@SIPX_CFDATA@/mongo.json",
                 help='Expected replset name for servers')
     parser.add_argument('--timeout', metavar="int", default=120,
@@ -448,7 +453,16 @@ if __name__ == '__main__':
             format='.%(message)s'
         )
 
-        admin = MongoAdminRedhatOps(args['model'], args['host_port'], args['dryrun'])        
+        # force a model to ensure obilerate will operate under any circumstance
+        if args['obliterate']:
+            args['host_port'] = 'localhost:27017'
+            args['model'] = {'servers': ['localhost:27017']}
+            args['action'] = [ 'OBLITERATE' ]
+
+        if not args['host_port']:
+            raise MongoAdminException('--host-port is a required for this option')
+
+        admin = MongoAdminRedhatOps(args['model'], args['host_port'], args['dryrun'])
         admin.timeout = args['timeout']
         if len(args['action']) > 0:
             admin.run(args['action'])

@@ -1,6 +1,7 @@
 <div jwcid="@common/Border" useDojo="ognl:true" borderTitle="ognl:borderTitle">
   <span jwcid="@common/QuickHelp" value="message:quick.help" />
    <span jwcid="@common/ErrorMsg"/>
+   
    <div jwcid="@If" condition="ognl:admin.inProgress">
      Operation in progress....
    </div>
@@ -8,31 +9,31 @@
   <form jwcid="form@Form" delegate="bean:validator" listener="listener:takeAction">
     <ul class="component-links">
       <li>
-	    <select jwcid="@Select" value="ognl:serverName" id="serverName">
-	      <option value=""><span key="label.selectServer"/></option>
-		  <span jwcid="@For" source="ognl:serverNames" value="ognl:currentServerName">
-		    <option jwcid="@Option" selected="ognl:serverNameSelected" label="ognl:currentServerName"/>
-	      </span>
-        </select>
-
-	    <select jwcid="@Select" value="ognl:serverAction" id="serverAction" 
-	        onchange="literal:javascript:this.form.submit();">
-	      <option value=""><span key="label.selectServerAction"/></option>
-		  <span jwcid="@For" source="ognl:serverActions" value="ognl:currentServerAction">
-		    <option jwcid="@Option" selected="ognl:serverActionSelected" label="ognl:messages.getMessage(currentServerAction)"/>
-	      </span>
-        </select>
+	     <div jwcid="@If" condition="ognl:addDbModel.optionCount > 1">
+		    <select jwcid="@PropertySelection" 
+		      model="ognl:addDbModel"
+			  value="ognl:addDb"
+			  onchange="literal:javascript:this.form.submit();"/>
+	     </div>
+	     <div jwcid="@If" condition="ognl:addArbiterModel.optionCount > 1">
+		    <select jwcid="@PropertySelection" 
+		      model="ognl:addArbiterModel"
+			  value="ognl:addArbiter"
+			  onchange="literal:javascript:this.form.submit();"/>
+	     </div>
       </li>
     </ul>
    <table jwcid="status@common/Table" id="status:list"
      columns="* !name,!state,!action"
-     source="ognl:admin.nodes"
+     source="ognl:meta.nodes"
      row="ognl:node"
      converter="ognl:converter">
+     
      <span jwcid="nameColumnValue@Block">
         <img jwcid="@Image" image="ognl:statusAsset" align="absmiddle"/>
-       <span jwcid="@Insert" value="ognl:node.label"/>
+       <span jwcid="@Insert" value="ognl:node.fqdn"/>
      </span>
+     
      <span jwcid="stateColumnValue@Block">
      	<ul>
 			<span jwcid="@For" source="ognl:node.status" value="ognl:status">
@@ -40,22 +41,22 @@
 		    </span>
 		</ul>
      </span>
+     
      <span jwcid="actionColumnValue@Block">
-     	Required
      	<ul>
-			<span jwcid="@For" source="ognl:admin.getRequiredActions(node.id)" value="ognl:action">
+			<span jwcid="@For" source="ognl:meta.getRequiredActions(node.hostPort)" value="ognl:action">
 	            <li><input jwcid="@Submit" id="mongo:action" value="ognl:localizedAction" 
-	              listener="listener:onSpecificServerAction" parameters="ognl:{node.id, action}"/><li>
+	              listener="listener:onSpecificServerAction" parameters="ognl:{node.hostPort, action}"/><li>
 			</span>
 		</ul>
-		Available
-     	<ul>
-			<span jwcid="@For" source="ognl:admin.getAvailableActions(node.id)" value="ognl:action">
-	            <li><input jwcid="@Submit" id="mongo:action" value="ognl:localizedAction" 
-	              listener="listener:onSpecificServerAction" parameters="ognl:{node.id, action}"/><li>
-			</span>
-		</ul>
+		
+	    <select jwcid="@PropertySelection" 
+	      model="ognl:availableActionModel"
+		  value="ognl:availableAction"
+		  onchange="literal:javascript:this.form.submit();"/>
+		  		
      </span>
+     
    </table>   
 	<ul class="component-submit">
 	  <li>

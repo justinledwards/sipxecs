@@ -14,39 +14,45 @@
  */
 package org.sipfoundry.sipxconfig.mongo;
 
+import java.util.Collections;
 import java.util.List;
 
 public class MongoNode {
-    private String m_id;
+    private static final List<String> NONE = Collections.emptyList();
+    private String m_hostPort;
     private List<String> m_status;
 
-    public MongoNode(String id, List<String> status) {
-        m_id = id;
+    public MongoNode(String hostPort, List<String> status) {
+        m_hostPort = hostPort;
         m_status = status;
     }
 
-    public String getId() {
-        return m_id;
+    public String getHostPort() {
+        return m_hostPort;
     }
 
     public List<String> getStatus() {
-        return m_status;
+        return m_status == null ? NONE : m_status;
     }
 
-    public String getLabel() {
-        return label(m_id);
+    public String getFqdn() {
+        return fqdn(m_hostPort);
     }
 
-    public static String label(String id) {
-        int colon = id.indexOf(':');
-        return colon > 0 ? id.substring(0, colon) : id;
+    public boolean isArbiter() {
+        return m_hostPort.endsWith(String.valueOf(MongoSettings.ARBITER_PORT));
     }
 
-    public static String arbiterId(String fqdn) {
+    public static String fqdn(String hostPort) {
+        int colon = hostPort.indexOf(':');
+        return colon > 0 ? hostPort.substring(0, colon) : hostPort;
+    }
+
+    public static String arbiterHostPort(String fqdn) {
         return fqdn + ':' + MongoSettings.ARBITER_PORT;
     }
 
-    public static String databaseId(String fqdn) {
+    public static String databaseHostPort(String fqdn) {
         return fqdn + ':' + MongoSettings.SERVER_PORT;
     }
 }

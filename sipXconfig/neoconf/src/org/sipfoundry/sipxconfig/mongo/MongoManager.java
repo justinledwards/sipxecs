@@ -49,5 +49,9 @@ public interface MongoManager {
 
     public String addArbiter(String primary, String server);
 
+    public String removeDatabase(String primary, String server);
+
+    public String removeArbiter(String primary, String server);
+
     public String takeAction(String server, String action);
 }

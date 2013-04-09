@@ -13,14 +13,12 @@
     <property name="proxyInterfaces" value="org.sipfoundry.sipxconfig.mongo.MongoManager"/>
   </bean>
   
-  <bean id="mongoAdmin" class="org.sipfoundry.sipxconfig.mongo.MongoAdmin" scope="prototype">
+  <bean id="mongoManagerImpl" class="org.sipfoundry.sipxconfig.mongo.MongoManagerImpl">
     <property name="mongoStatusScript" value="${sysdir.bin}/mongodb-status"/>
     <property name="mongoAnalyzerScript" value="${sysdir.bin}/mongodb-analyzer"/>
     <property name="mongoAdminScript" value="mongodb-admin"/>
     <property name="configManager" ref="configManager"/>
-  </bean>
-
-  <bean id="mongoManagerImpl" class="org.sipfoundry.sipxconfig.mongo.MongoManagerImpl">
+    <property name="featureManager" ref="featureManager"/>
     <property name="settingsDao">
       <bean parent="beanWithSettingsDao">
         <property name="target">

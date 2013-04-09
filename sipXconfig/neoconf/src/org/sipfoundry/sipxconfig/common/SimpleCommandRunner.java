@@ -129,7 +129,9 @@ public class SimpleCommandRunner implements CommandRunner {
                     } catch (InterruptedException willBeHandledByReaper) {
                         LOG.error("Interrupted running " + fullCommand);
                     } finally {
-                        SimpleCommandRunner.this.notifyAll();
+                        synchronized (SimpleCommandRunner.this) {
+                            SimpleCommandRunner.this.notifyAll();
+                        }
                     }
                 }
             };
@@ -140,6 +142,8 @@ public class SimpleCommandRunner implements CommandRunner {
 
             // all ok
             if (m_exitCode != null) {
+                m_outThread.join();
+                m_errThread.join();
                 return true;
             }
 
@@ -172,7 +176,9 @@ public class SimpleCommandRunner implements CommandRunner {
             reaperThread.start();
 
             // just in case notify from finishing process didn't get called
-            notifyAll();
+            synchronized (this) {
+                notifyAll();
+            }
 
             return false;
         } catch (IOException e) {

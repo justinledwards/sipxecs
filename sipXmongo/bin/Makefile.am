@@ -16,6 +16,8 @@ mongodb_TESTS = \
 	two-node-uninitialized \
 	two-node-one-initializing \
 	two-node-one-removed \
+	two-node-db-unaware-of-arbiter \
+	two-node-bad-config-ver \
 	three-node-unavailable-server \
 	three-node-unhealthy-server \
 	three-node-missing-arbiter-and-database \
@@ -49,7 +51,7 @@ check-status:
 	  echo "EXPECTED $$expected"; \
 	  echo "$(srcdir)/mongodb-status.in --parse < $$input"; \
 	  $(srcdir)/mongodb-status.in --parse < $$input  > actual; \
-	  diff -u actual $$expected || exit 1; \
+	  diff -u $$expected actual || exit 1; \
 	done
 
 check-analyzer:
@@ -60,7 +62,7 @@ check-analyzer:
 	  echo "EXPECTED: $$expected"; \
 	  echo "$(srcdir)/mongodb-analyzer.in < $$input"; \
 	  $(srcdir)/mongodb-analyzer.in < $$input > actual; \
-	  diff -u actual $$expected  || exit 1; \
+	  diff -u $$expected actual  || exit 1; \
 	done
 
 check-admin:

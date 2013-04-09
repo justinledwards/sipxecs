@@ -39,7 +39,7 @@ public class MongoMetaTest {
         Collection<MongoNode> nodes = m_meta.getNodes();
         assertEquals(3, nodes.size());
         assertNotNull(m_meta.getNode("swift.hubler.us:27017"));
-        assertEquals("swift.hubler.us:27017", m_meta.getPrimary().getId());
+        assertEquals("swift.hubler.us:27017", m_meta.getPrimary().getHostPort());
     }
 
     @Test

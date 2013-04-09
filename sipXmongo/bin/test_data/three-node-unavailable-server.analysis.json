@@ -1,12 +1,10 @@
 {
     "available": {
         "swift.hubler.us:27018": [
-            "RESTART",
-            "REMOVE swift.hubler.us:27018"
+            "RESTART"
         ],
         "swift.hubler.us:27019": [
-            "RESTART",
-            "REMOVE swift.hubler.us:27019"
+            "RESTART"
         ],
         "swift.hubler.us:27017": [
             "RESTART"

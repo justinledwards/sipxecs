@@ -23,6 +23,12 @@ public class SimpleCommandRunnerTest {
         m_runner.setStdin("hello");
         m_runner.run(new String[] {"/bin/cat"}, 100);
         assertEquals("hello", m_runner.getStdout());        
+    }
+    
+    @Test
+    public void stdout() throws InterruptedException {
+        m_runner.run(new String[] {"/bin/echo", "hi"}, 100);
+        assertEquals("hi\n", m_runner.getStdout());        
     }    
 
     @Test

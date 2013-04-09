@@ -90,28 +90,83 @@ public class MongoManagerImpl implements AddressProvider, FeatureProvider, Mongo
         return m_actionRunner != null && m_actionRunner.isInProgress();
     }
 
-    public String addDatabase(String primary, String server) {
-        return addNode(primary, server, MongoManager.FEATURE_ID);
+    public String addDatabase(String primaryHostPort, String hostPort) {
+        return addRemove(primaryHostPort, hostPort, MongoManager.FEATURE_ID, true);
     }
 
-    public String addArbiter(String primary, String server) {
-        return addNode(primary, server, MongoManager.ARBITER_FEATURE);
+    public String addArbiter(String primaryHostPort, String hostPort) {
+        return addRemove(primaryHostPort, hostPort, MongoManager.ARBITER_FEATURE, true);
     }
 
-    String addNode(String primary, String server, LocationFeature feature) {
-        Location l = m_configManager.getLocationManager().getLocationByFqdn(server);
-        m_featureManager.enableLocationFeature(feature, l, true);
+    @Override
+    public String removeDatabase(String primaryHostPort, String hostPort) {
+        return addRemove(primaryHostPort, hostPort, MongoManager.FEATURE_ID, false);
+    }
 
+    @Override
+    public String removeArbiter(String primaryHostPort, String hostPort) {
+        return addRemove(primaryHostPort, hostPort, MongoManager.ARBITER_FEATURE, false);
+    }
+
+    String addRemove(String primaryHostPort, String hostPort, LocationFeature feature, boolean enable) {
         checkInProgress();
-        BatchCommandRunner batch = new BatchCommandRunner("adding database" + server);
+        String host = MongoNode.fqdn(hostPort);
+        Location l = m_configManager.getLocationManager().getLocationByFqdn(host);
+        m_featureManager.enableLocationFeature(feature, l, enable);
+
+        String msg = (enable ? "adding " : "removing ")  + hostPort;
+        BatchCommandRunner batch = new BatchCommandRunner(msg);
         m_actionRunner = batch;
-        batch.add(createSimpleAction(server, "START", m_backgroundTimeout));
 
         // this is going to be a problem add model is not in place yet
-        batch.add(createSimpleAction(primary, "ADD " + server, m_backgroundTimeout));
+        batch.add(new ConfigCommandRunner());
+
+        String action = (enable ? "ADD " : "REMOVE ")  + hostPort;
+        batch.add(createSimpleAction(primaryHostPort, action, m_backgroundTimeout));
         boolean done = batch.run();
         return done ? batch.getStdout() : null;
     }
+
+    /**
+     * Nothing fancy because it would never run fast enough to return in the foreground timeout
+     * and even if there were errors, they may not be related to what you're trying to
+     * do and you'd likely have to ignore them anyway.  The error still go into the job
+     * status table
+     */
+    class ConfigCommandRunner implements CommandRunner {
+        private boolean m_inProgress;
+
+        @Override
+        public boolean run() {
+            m_inProgress = true;
+            m_configManager.run();
+            m_inProgress = false;
+            synchronized (this) {
+                ConfigCommandRunner.this.notifyAll();
+            }
+            return true;
+        }
+
+        @Override
+        public boolean isInProgress() {
+            return m_inProgress;
+        }
+
+        @Override
+        public String getStdout() {
+            return null;
+        }
+
+        @Override
+        public String getStderr() {
+            return null;
+        }
+
+        @Override
+        public Integer getExitCode() {
+            return 0;
+        }
+    };
 
     public void checkInProgress() {
         if (isInProgress()) {
@@ -119,23 +174,23 @@ public class MongoManagerImpl implements AddressProvider, FeatureProvider, Mongo
         }
     }
 
-    public String takeAction(String server, String action) {
+    public String takeAction(String hostPort, String action) {
         checkInProgress();
 
-        SimpleCommandRunner runner = createSimpleAction(server, action, 0);
+        SimpleCommandRunner runner = createSimpleAction(hostPort, action, 0);
         m_actionRunner = runner;
         boolean done = m_actionRunner.run();
         return done ? m_actionRunner.getStdout() : null;
     }
 
-    SimpleCommandRunner createSimpleAction(String server, String action, int background) {
+    SimpleCommandRunner createSimpleAction(String hostPort, String action, int background) {
         SimpleCommandRunner runner = new SimpleCommandRunner();
 
-        String fqdn = MongoNode.label(server);
+        String fqdn = MongoNode.fqdn(hostPort);
         String remote = m_configManager.getRemoteCommand(fqdn);
         StringBuilder cmd = new StringBuilder(remote);
         cmd.append(' ').append(m_mongoAdminScript);
-        cmd.append(" --host_port ").append(server);
+        cmd.append(" --host_port ").append(hostPort);
         cmd.append(' ').append(action);
         String command = cmd.toString();
         runner.setRunParameters(StringUtils.split(command), m_timeout, background);

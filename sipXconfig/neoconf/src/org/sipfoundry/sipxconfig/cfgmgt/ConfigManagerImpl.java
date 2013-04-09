@@ -159,6 +159,14 @@ public class ConfigManagerImpl implements AddressProvider, ConfigManager, BeanFa
     }
 
     @Override
+    public void run() {
+        ConfigRequest work = getWork();
+        if (work != null) {
+            doWork(work);
+        }
+    }
+
+    @Override
     public void runProviders() {
         ConfigRequest work = getWork();
         if (work != null) {
@@ -333,8 +341,8 @@ public class ConfigManagerImpl implements AddressProvider, ConfigManager, BeanFa
         @Override
         protected boolean work() {
             ConfigRequest work = getWork();
-            // check null, it's possible work has been done by the time we
-            // have gotten around to it
+            // work could be null if call to run() was made explicitly
+            // then this is a nop.
             if (work != null) {
                 doWork(work);
             }
