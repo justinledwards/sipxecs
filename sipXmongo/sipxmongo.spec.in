@@ -64,5 +64,13 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(644,root,root,755)
 %attr(755,root,root) %{_sysconfdir}/sipxpbx/mongo/mongo.sec.erb
 %attr(755,root,root) %{_sysconfdir}/init.d/mongod-arbiter
-%attr(755,root,root) %{_bindir}/mongodb-repair
+<<<<<<< HEAD
+%attr(755,root,root) %{_bindir}/mongodb-status
+%attr(755,root,root) %{_bindir}/mongodb-analyzer
+%attr(755,root,root) %{_bindir}/mongodb-admin
+=======
+%attr(755,root,root) %{_bindir}/mongo-admin
+%attr(755,root,root) %{_bindir}/mongo-replication-admin
+>>>>>>> 73d964b684c930127b080323f55d814807f3b159
 %{_datadir}/sipxecs/cfinputs/plugin.d/mongodb.cf
+%{_datadir}/sipxecs/cfinputs/plugin.d/lib/mongodb_actions.cf

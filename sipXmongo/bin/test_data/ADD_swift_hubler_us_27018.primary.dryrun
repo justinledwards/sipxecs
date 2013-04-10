@@ -1,0 +1,2 @@
+COMMAND:ADD swift.hubler.us:27018
+RS:rs.addArb("swift.hubler.us:27018")

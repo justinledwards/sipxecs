@@ -21,6 +21,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.sipfoundry.sipxconfig.address.Address;
@@ -30,6 +31,11 @@ import org.sipfoundry.sipxconfig.address.AddressType;
 import org.sipfoundry.sipxconfig.alarm.AlarmDefinition;
 import org.sipfoundry.sipxconfig.alarm.AlarmProvider;
 import org.sipfoundry.sipxconfig.alarm.AlarmServerManager;
+import org.sipfoundry.sipxconfig.cfgmgt.ConfigManager;
+import org.sipfoundry.sipxconfig.common.BatchCommandRunner;
+import org.sipfoundry.sipxconfig.common.CommandRunner;
+import org.sipfoundry.sipxconfig.common.SimpleCommandRunner;
+import org.sipfoundry.sipxconfig.common.UserException;
 import org.sipfoundry.sipxconfig.commserver.Location;
 import org.sipfoundry.sipxconfig.feature.Bundle;
 import org.sipfoundry.sipxconfig.feature.FeatureChangeRequest;
@@ -49,11 +55,206 @@ import org.sipfoundry.sipxconfig.setup.SetupManager;
 import org.sipfoundry.sipxconfig.snmp.ProcessDefinition;
 import org.sipfoundry.sipxconfig.snmp.ProcessProvider;
 import org.sipfoundry.sipxconfig.snmp.SnmpManager;
+import org.springframework.beans.factory.annotation.Required;
 
 public class MongoManagerImpl implements AddressProvider, FeatureProvider, MongoManager, ProcessProvider,
         SetupListener, FirewallProvider, AlarmProvider {
     private static final Log LOG = LogFactory.getLog(MongoManagerImpl.class);
     private BeanWithSettingsDao<MongoSettings> m_settingsDao;
+    private int m_timeout = 1000;
+    private int m_backgroundTimeout = 120000; // can take a while for fresh mongo to init
+    private String m_mongoStatusScript;
+    private String m_mongoAnalyzerScript;
+    private String m_mongoAdminScript;
+    private CommandRunner m_actionRunner;
+    private ConfigManager m_configManager;
+    private FeatureManager m_featureManager;
+
+    public MongoMeta getMeta() {
+        SimpleCommandRunner srunner = new SimpleCommandRunner();
+        String statusToken = run(srunner, m_mongoStatusScript);
+        MongoMeta meta = new MongoMeta();
+        meta.setStatusToken(statusToken);
+
+        if (statusToken != null) {
+            SimpleCommandRunner arunner = new SimpleCommandRunner();
+            arunner.setStdin(statusToken);
+            String analysisToken = run(arunner, m_mongoAnalyzerScript);
+            meta.setAnalysisToken(analysisToken);
+        }
+
+        return meta;
+    }
+
+    public boolean isInProgress() {
+        return m_actionRunner != null && m_actionRunner.isInProgress();
+    }
+
+    public String addDatabase(String primaryHostPort, String hostPort) {
+        return addRemove(primaryHostPort, hostPort, MongoManager.FEATURE_ID, true);
+    }
+
+    public String addArbiter(String primaryHostPort, String hostPort) {
+        return addRemove(primaryHostPort, hostPort, MongoManager.ARBITER_FEATURE, true);
+    }
+
+    @Override
+    public String removeDatabase(String primaryHostPort, String hostPort) {
+        return addRemove(primaryHostPort, hostPort, MongoManager.FEATURE_ID, false);
+    }
+
+    @Override
+    public String removeArbiter(String primaryHostPort, String hostPort) {
+        return addRemove(primaryHostPort, hostPort, MongoManager.ARBITER_FEATURE, false);
+    }
+
+    String addRemove(String primaryHostPort, String hostPort, LocationFeature feature, boolean enable) {
+        checkInProgress();
+        String host = MongoNode.fqdn(hostPort);
+        Location l = m_configManager.getLocationManager().getLocationByFqdn(host);
+        m_featureManager.enableLocationFeature(feature, l, enable);
+
+        String msg = (enable ? "adding " : "removing ")  + hostPort;
+        BatchCommandRunner batch = new BatchCommandRunner(msg);
+        m_actionRunner = batch;
+
+        // this is going to be a problem add model is not in place yet
+        batch.add(new ConfigCommandRunner());
+
+        String action = (enable ? "ADD " : "REMOVE ")  + hostPort;
+        batch.add(createSimpleAction(primaryHostPort, action, m_backgroundTimeout));
+        boolean done = batch.run();
+        return done ? batch.getStdout() : null;
+    }
+
+    /**
+     * Nothing fancy because it would never run fast enough to return in the foreground timeout
+     * and even if there were errors, they may not be related to what you're trying to
+     * do and you'd likely have to ignore them anyway.  The error still go into the job
+     * status table
+     */
+    class ConfigCommandRunner implements CommandRunner {
+        private boolean m_inProgress;
+
+        @Override
+        public boolean run() {
+            m_inProgress = true;
+            m_configManager.run();
+            m_inProgress = false;
+            synchronized (this) {
+                ConfigCommandRunner.this.notifyAll();
+            }
+            return true;
+        }
+
+        @Override
+        public boolean isInProgress() {
+            return m_inProgress;
+        }
+
+        @Override
+        public String getStdout() {
+            return null;
+        }
+
+        @Override
+        public String getStderr() {
+            return null;
+        }
+
+        @Override
+        public Integer getExitCode() {
+            return 0;
+        }
+    };
+
+    public void checkInProgress() {
+        if (isInProgress()) {
+            throw new UserException("Operation still in progress");
+        }
+    }
+
+    public String takeAction(String hostPort, String action) {
+        checkInProgress();
+
+        SimpleCommandRunner runner = createSimpleAction(hostPort, action, 0);
+        m_actionRunner = runner;
+        boolean done = m_actionRunner.run();
+        return done ? m_actionRunner.getStdout() : null;
+    }
+
+    SimpleCommandRunner createSimpleAction(String hostPort, String action, int background) {
+        SimpleCommandRunner runner = new SimpleCommandRunner();
+
+        String fqdn = MongoNode.fqdn(hostPort);
+        String remote = m_configManager.getRemoteCommand(fqdn);
+        StringBuilder cmd = new StringBuilder(remote);
+        cmd.append(' ').append(m_mongoAdminScript);
+        cmd.append(" --host_port ").append(hostPort);
+        cmd.append(' ').append(action);
+        String command = cmd.toString();
+        runner.setRunParameters(StringUtils.split(command), m_timeout, background);
+        return runner;
+    }
+
+    String runBackgroundOk(SimpleCommandRunner runner, String cmd) {
+        if (!runner.run(StringUtils.split(cmd), m_timeout, m_backgroundTimeout)) {
+            return null;
+        }
+        return getOutput(cmd, runner.getStdin(), runner);
+    }
+
+    String run(SimpleCommandRunner runner, String cmd) {
+        if (!runner.run(StringUtils.split(cmd), m_timeout)) {
+            throw new UserException(cmd + " did not complete in time");
+        }
+        return getOutput(cmd, runner.getStdin(), runner);
+    }
+
+    String getOutput(String cmd, String in, CommandRunner runner) {
+        if (0 != runner.getExitCode()) {
+            String err = runner.getStderr();
+            if (err != null) {
+                err = cmd + " had exit code " + runner.getExitCode();
+            }
+            if (in != null) {
+                LOG.error(in);
+            }
+            throw new UserException(err);
+        }
+
+        return runner.getStdout();
+    }
+
+    public void setBackgroundTimeout(int backgroundTimeout) {
+        m_backgroundTimeout = backgroundTimeout;
+    }
+
+    public void setMongoAdminScript(String mongoAdminScript) {
+        m_mongoAdminScript = mongoAdminScript;
+    }
+
+    public void setFeatureManager(FeatureManager featureManager) {
+        m_featureManager = featureManager;
+    }
+
+    public void setConfigManager(ConfigManager configManager) {
+        m_configManager = configManager;
+    }
+
+    public void setTimeout(int timeout) {
+        m_timeout = timeout;
+    }
+
+    @Required
+    public void setMongoStatusScript(String mongoStatusScript) {
+        m_mongoStatusScript = mongoStatusScript;
+    }
+
+    @Required
+    public void setMongoAnalyzerScript(String mongoAnalyzerScript) {
+        m_mongoAnalyzerScript = mongoAnalyzerScript;
+    }
 
     @Override
     public MongoSettings getSettings() {
@@ -140,22 +341,26 @@ public class MongoManagerImpl implements AddressProvider, FeatureProvider, Mongo
     @Override
     public void featureChangePrecommit(FeatureManager manager, FeatureChangeValidator validator) {
         FeatureChangeRequest request = validator.getRequest();
-        if (!request.hasChanged(FEATURE_ID) || !request.hasChanged(ARBITER_FEATURE)) {
+        if (!request.hasChanged(FEATURE_ID)) {
             return;
         }
 
         Collection<Location> mongos = validator.getLocationsForEnabledFeature(FEATURE_ID);
-        Collection<Location> arbiters = validator.getLocationsForEnabledFeature(ARBITER_FEATURE);
-        if ((mongos.size() % 2) == 0) {
-            if (arbiters.size() != 1) {
-                InvalidChangeException err = new InvalidChangeException("&error.missingMongoArbiter");
-                InvalidChange needArbiter = new InvalidChange(ARBITER_FEATURE, err);
-                validator.getInvalidChanges().add(needArbiter);
+        if (mongos.size() == 0) {
+            InvalidChangeException err = new InvalidChangeException("&error.noMongos");
+            InvalidChange needArbiter = new InvalidChange(FEATURE_ID, err);
+            validator.getInvalidChanges().add(needArbiter);
+        } else {
+            boolean includesPrimary = false;
+            for (Location l : mongos) {
+                includesPrimary = l.isPrimary();
+                if (includesPrimary) {
+                    break;
+                }
             }
-        } else if (mongos.size() > 1) {
-            if (arbiters.size() != 0) {
-                InvalidChangeException err = new InvalidChangeException("&error.extraMongoArbiter");
-                InvalidChange removeArbiter = new InvalidChange(ARBITER_FEATURE, err);
+            if (!includesPrimary) {
+                InvalidChangeException err = new InvalidChangeException("&error.mongoOnPrimaryRequired");
+                InvalidChange removeArbiter = new InvalidChange(FEATURE_ID, err);
                 validator.getInvalidChanges().add(removeArbiter);
             }
         }
@@ -172,9 +377,15 @@ public class MongoManagerImpl implements AddressProvider, FeatureProvider, Mongo
             return null;
         }
         Collection<AlarmDefinition> defs = Arrays.asList(new AlarmDefinition[] {
-            MONGO_FATAL_REPLICATION_STOP, MONGO_FAILED_ELECTION, MONGO_MEMBER_DOWN,
-            MONGO_NODE_STATE_CHANGED, MONGO_CANNOT_SEE_MAJORITY
+            MONGO_FATAL_REPLICATION_STOP, MONGO_FAILED_ELECTION, MONGO_MEMBER_DOWN, MONGO_NODE_STATE_CHANGED,
+            MONGO_CANNOT_SEE_MAJORITY
         });
         return defs;
+    }
+
+    @Override
+    public boolean isMisconfigured() {
+        // TODO Auto-generated method stub
+        return false;
     }
 }
