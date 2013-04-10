@@ -30,6 +30,8 @@ public interface MongoManager {
     public static final LocationFeature ARBITER_FEATURE = new LocationFeature(ARBITOR);
     public static final AlarmDefinition MONGO_FATAL_REPLICATION_STOP = new AlarmDefinition(
             "MONGO_FATAL_REPLICATION_STOP");
+    public static final AlarmDefinition MONGO_FATAL_REPLICATION_STOP =
+            new AlarmDefinition("MONGO_FATAL_REPLICATION_STOP");
     public static final AlarmDefinition MONGO_FAILED_ELECTION = new AlarmDefinition("MONGO_FAILED_ELECTION", 1);
     public static final AlarmDefinition MONGO_MEMBER_DOWN = new AlarmDefinition("MONGO_MEMBER_DOWN", 2);
     public static final AlarmDefinition MONGO_NODE_STATE_CHANGED = new AlarmDefinition("MONGO_NODE_STATE_CHANGED");
