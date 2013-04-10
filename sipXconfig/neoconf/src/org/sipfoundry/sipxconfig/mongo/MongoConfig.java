@@ -43,8 +43,7 @@ public class MongoConfig implements ConfigProvider {
 
     @Override
     public void replicate(ConfigManager manager, ConfigRequest request) throws IOException {
-        if (!request.applies(MongoManager.FEATURE_ID, LocationsManager.FEATURE, MongoManager.ARBITER_FEATURE,
-                MongoManager.ACTIVE_ARBITER, MongoManager.ACTIVE_DATABASE)) {
+        if (!request.applies(MongoManager.FEATURE_ID, LocationsManager.FEATURE, MongoManager.ARBITER_FEATURE)) {
             return;
         }
         FeatureManager fm = manager.getFeatureManager();
