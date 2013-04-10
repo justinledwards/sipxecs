@@ -16,6 +16,9 @@
  */
 package org.sipfoundry.sipxconfig.phone.polycom;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
@@ -41,28 +44,57 @@ public class FirmwareUpdateListener implements DaoEventListener {
 
     @Override
     public void onSave(Object entity) {
-        if (entity instanceof Group) {
+        //when we change group order (weight) we also need to change version
+        if (entity instanceof ArrayList<?>) {
+            List<?> list = (ArrayList<?>) entity;
+            if (list.isEmpty()) {
+                return;
+            }
+            Object o = list.iterator().next();
+            if (o instanceof Group) {
+               setPhoneDeviceVersion((Group) o); 
+            }
+        } else if (entity instanceof Group) {
             Group g = (Group) entity;
-            if (Phone.GROUP_RESOURCE_ID.equals(g.getResource())) {
-                if (g.getSettingValue(GROUP_FW_VERSION) != null
-                        && StringUtils.isNotEmpty(g.getSettingValue(GROUP_FW_VERSION))) {
-                    for (Phone phone : m_phoneContext.getPhonesByGroupId(g.getId())) {
-                        if (phone instanceof PolycomPhone) {
-                            DeviceVersion version = DeviceVersion.getDeviceVersion(PolycomPhone.BEAN_ID
-                                    + g.getSettingValue(GROUP_FW_VERSION));
-                            if (ArrayUtils.contains(phone.getModel().getVersions(), version)) {
-                                LOG.info("Updating " + phone.getSerialNumber() + " to " + version.getVersionId());
-                                phone.setDeviceVersion(version);
-                                m_phoneContext.storePhone(phone);
-                            } else {
-                                LOG.info("Skipping " + phone.getSerialNumber() + " as it doesn't support "
-                                        + version.getVersionId() + "; model: " + phone.getModelId());
-                            }
-                        }
+            setPhoneDeviceVersion(g);
+        } else if (entity instanceof PolycomPhone) {
+            PolycomPhone phone = (PolycomPhone) entity;
+            if (phone.getGroups().isEmpty()) {
+                return;
+            }
+            Group groupWithHighestWeight = phone.getGroups().iterator().next(); 
+            if (groupWithHighestWeight.getSettingValue(GROUP_FW_VERSION) == null) {
+                return;
+            }
+            setPhoneDeviceVersion(phone, groupWithHighestWeight);
+        }
+
+    }
+    
+    private void setPhoneDeviceVersion(Group g) {
+        if (Phone.GROUP_RESOURCE_ID.equals(g.getResource())) {
+            if (g.getSettingValue(GROUP_FW_VERSION) != null
+                    && StringUtils.isNotEmpty(g.getSettingValue(GROUP_FW_VERSION))) {
+                for (Phone phone : m_phoneContext.getPhonesByGroupId(g.getId())) {
+                    if (phone instanceof PolycomPhone) {
+                        setPhoneDeviceVersion(phone, g);
+                        m_phoneContext.storePhone(phone);
                     }
                 }
             }
         }
-
+    }
+    
+    private void setPhoneDeviceVersion(Phone phone, Group g) {
+        DeviceVersion version = DeviceVersion.getDeviceVersion(PolycomPhone.BEAN_ID
+                + g.getSettingValue(GROUP_FW_VERSION));
+        if (ArrayUtils.contains(phone.getModel().getVersions(), version)) {
+            LOG.info("Updating " + phone.getSerialNumber() + " to " + version.getVersionId());
+            phone.setDeviceVersion(version);
+            
+        } else {
+            LOG.info("Skipping " + phone.getSerialNumber() + " as it doesn't support "
+                    + version.getVersionId() + "; model: " + phone.getModelId());
+        }
     }
 }
