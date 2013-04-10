@@ -1,10 +1,12 @@
-include config/utility.am
-include config/project.am
+include $(top_srcdir)/config/utility.am
 
-SUBDIRS = \
-  bin \
-  etc \
-  cpp-executable \
-  cpp-library \
-  config-plugin \
-  ruby-module
+EXTRA_DIST = \
+	$(bin_SCRIPTS:=.in)
+
+bin_SCRIPTS = \
+	sipxexample-script
+
+$(bin_SCRIPTS) : % : %.in
+	@$(call SearchAndReplace,$<,$@)
+
+CLEANFILES = $(bin_SCRIPTS)
