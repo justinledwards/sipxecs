@@ -43,16 +43,4 @@
     </property>
   </bean>  
   
-  <bean id="mongoReplicaSetManager2" class="org.sipfoundry.sipxconfig.mongo.MongoReplicaSetManager2">
-    <property name="replicationAdminScript" value="${sysdir.bin}/mongo-replication-admin" />  
-    <property name="featureManager" ref="featureManager" />  
-    <property name="configManager" ref="configManager" />  
-    <property name="locationsManager" ref="locationsManager" />  
-  </bean>
-  
-  <bean id="mongoActionModel" class="org.sipfoundry.sipxconfig.mongo.MongoActionModel" scope="prototype">
-    <property name="featureManager" ref="featureManager" />  
-    <property name="locationsManager" ref="locationsManager" />
-  </bean>
->>>>>>> 73d964b684c930127b080323f55d814807f3b159
 </beans>
