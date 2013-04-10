@@ -179,6 +179,7 @@ exclude+='|^test_son_manipulator$'
 exclude+='|^test_threads$'
 exclude+='|^test_threads_replica_set_connection$'
 exclude+='|^test_read_preferences.py$'
+exclude+='|^test_json_util$'
 exclude+=')'
 # Exclude tests that require an active MongoDB connection
 pushd test
@@ -189,6 +190,7 @@ popd
 %changelog
 * Wed Feb 13 2013 Douglas Hubler <dhubler@ezuce.com> - 2.4.2-1
 - Update to 2.4.2
+- Remove more unit tests that required running mongo server
 
 * Tue Apr 10 2012 Silas Sewell <silas@sewell.org> - 2.1.1-1
 - Update to 2.1.1
