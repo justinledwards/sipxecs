@@ -75,23 +75,8 @@ public class FirmwareUpdateListener implements DaoEventListener {
                 return;
             }
             setPhoneDeviceVersion(phone, groupWithHighestWeight);
-        }
-
-    }
-    
-    private void setPhoneDeviceVersion(Group g) {
-        if (Phone.GROUP_RESOURCE_ID.equals(g.getResource())) {
-            if (g.getSettingValue(GROUP_FW_VERSION) != null
-                    && StringUtils.isNotEmpty(g.getSettingValue(GROUP_FW_VERSION))) {
-                for (Phone phone : m_phoneContext.getPhonesByGroupId(g.getId())) {
-                    if (phone instanceof PolycomPhone) {
-                        setPhoneDeviceVersion(phone, g);
-                        m_phoneContext.storePhone(phone);
-                    }
-                }
-            }
-        } else if (entity instanceof PolycomPhone) {
-            PolycomPhone phone = (PolycomPhone) entity;
+            
+            //some settings might have different defaults. Check them here.
             String transport = phone.getSettingValue(SETTING_TRANSPORT_VOIPPROT);
             DeviceVersion ver = phone.getDeviceVersion();
             if ((ver.equals(PolycomModel.VER_3_2_X) || ver.equals(PolycomModel.VER_3_1_X))
@@ -128,6 +113,21 @@ public class FirmwareUpdateListener implements DaoEventListener {
                 }
             }
         }
+
+    }
+    
+    private void setPhoneDeviceVersion(Group g) {
+        if (Phone.GROUP_RESOURCE_ID.equals(g.getResource())) {
+            if (g.getSettingValue(GROUP_FW_VERSION) != null
+                    && StringUtils.isNotEmpty(g.getSettingValue(GROUP_FW_VERSION))) {
+                for (Phone phone : m_phoneContext.getPhonesByGroupId(g.getId())) {
+                    if (phone instanceof PolycomPhone) {
+                        setPhoneDeviceVersion(phone, g);
+                        m_phoneContext.storePhone(phone);
+                    }
+                }
+            }
+        } 
     }
     
     private void setPhoneDeviceVersion(Phone phone, Group g) {
