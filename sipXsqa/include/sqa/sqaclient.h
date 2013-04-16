@@ -435,7 +435,7 @@ inline SQAWatcher::SQAWatcher(
 )
 {
   _connection = (uintptr_t)(new StateQueueClient(
-          StateQueueClient::Watcher,
+          ServiceTypeWatcher,
           applicationId,
           serviceAddress,
           servicePort,
@@ -455,7 +455,7 @@ inline SQAWatcher::SQAWatcher(
 )
 {
   _connection = (uintptr_t)(new StateQueueClient(
-          StateQueueClient::Watcher,
+          ServiceTypeWatcher,
           applicationId,
           eventId,
           false,
@@ -561,7 +561,7 @@ inline std::map<std::string, std::string> SQAWatcher::mgetAll(int workspace, con
 }
 
 //
-// Inline implmentation of the SQA Publisher class
+// Inline implmentation of the SQA ServiceTypePublisher class
 //
 inline SQAPublisher::SQAPublisher(
   const char* applicationId, // Unique application ID that will identify this watcher to SQA
@@ -574,11 +574,11 @@ inline SQAPublisher::SQAPublisher(
 )
 {
   _connection = (uintptr_t)(new StateQueueClient(
-          StateQueueClient::Publisher,
+          ServiceTypePublisher,
           applicationId,
           serviceAddress,
           servicePort,
-          SQA_TYPE_PUBLISHER,
+          serviceTypeStr[ServiceTypePublisher],
           isExternal,
           poolSize,
           readTimeout,
@@ -593,9 +593,9 @@ inline SQAPublisher::SQAPublisher(
 )
 {
   _connection = (uintptr_t)(new StateQueueClient(
-          StateQueueClient::Publisher,
+          ServiceTypePublisher,
           applicationId,
-          SQA_TYPE_PUBLISHER,
+          serviceTypeStr[ServiceTypePublisher],
           poolSize,
           readTimeout,
           writeTimeout));
@@ -705,7 +705,7 @@ inline SQADealer::SQADealer(
 )
 {
   _connection = (uintptr_t)(new StateQueueClient(
-          StateQueueClient::Publisher,
+          ServiceTypePublisher,
           applicationId,
           serviceAddress,
           servicePort,
@@ -725,7 +725,7 @@ inline SQADealer::SQADealer(
 )
 {
   _connection = (uintptr_t)(new StateQueueClient(
-          StateQueueClient::Publisher,
+          ServiceTypePublisher,
           applicationId,
           eventId,
           false,
@@ -834,7 +834,7 @@ inline SQAWorker::SQAWorker(
 )
 {
   _connection = (uintptr_t)(new StateQueueClient(
-          StateQueueClient::Worker,
+          ServiceTypeWorker,
           applicationId,
           serviceAddress,
           servicePort,
@@ -854,7 +854,7 @@ inline SQAWorker::SQAWorker(
 )
 {
   _connection = (uintptr_t)(new StateQueueClient(
-          StateQueueClient::Worker,
+          ServiceTypeWorker,
           applicationId,
           eventId,
           false,
@@ -886,18 +886,12 @@ inline SQAEvent* SQAWorker::fetchTask()
 {
   std::string id;
   std::string data;
-  SQAEvent* pEvent = new SQAEvent();
+  SQAEvent* pEvent = 0;
   if (!reinterpret_cast<StateQueueClient*>(_connection)->pop(id, data))
     return pEvent;
 
-  pEvent->id = (char*)malloc(id.size());
-  ::memcpy(pEvent->id, id.data(), id.size());
+  pEvent = new SQAEvent(id, data);
 
-  pEvent->data = (char*)malloc(data.size());
-  ::memcpy(pEvent->data, data.data(), data.size());
-
-  pEvent->data_len = data.size();
-  pEvent->id_len = id.size();
   return pEvent;
 }
 

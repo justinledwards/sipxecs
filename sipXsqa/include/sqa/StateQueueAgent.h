@@ -44,6 +44,22 @@ public:
   void onIncomingConnection(StateQueueConnection::Ptr conn);
   void onIncomingRequest(StateQueueConnection& conn, const char* bytes, std::size_t bytes_transferred);
 
+  void fillConnectionEventRecord(StateQueueRecord &record, StateQueueConnection& conn, ConnectionEvent connnectionEvent);
+  void fillWatcherEventRecord(
+          StateQueueRecord &record,
+          const std::string &messageId,
+          const std::string &messageData,
+          int expires = 0
+          );
+
+  void fillWorkerEventRecord(
+          StateQueueRecord &record,
+          const std::string &messageId,
+          const std::string &messageData,
+          int expires = 0
+          );
+
+
   void handleSignin(StateQueueConnection& conn, StateQueueMessage& message,
     const std::string& id, const std::string& appId, bool noExternalPublish);
 

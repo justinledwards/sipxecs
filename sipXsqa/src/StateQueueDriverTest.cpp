@@ -17,6 +17,24 @@
 #include <iostream>
 #include "sqa/UnitTest.h"
 
+void terminateWatcherFunc(StateQueueClient *watcher)
+{
+    watcher->terminate();
+}
+
+void timedTerminateWatcher(int timeoutMsec, StateQueueClient *watcher)
+{
+    boost::this_thread::sleep(boost::posix_time::milliseconds(timeoutMsec));
+
+    boost::thread *thread = new boost::thread(boost::bind(&terminateWatcherFunc, watcher));
+    if (thread)
+    {
+        thread->join();
+        delete thread;
+        thread = NULL;
+    }
+}
+
 //
 // DEFINE_UNIT_TEST - Define a Test Group.  Must be called prior to DEFINE_TEST
 // DEFINE_TEST - Define a new unit test belonging to a defined group
@@ -125,13 +143,17 @@ DEFINE_TEST(TestDriver, TestSimplePersistGetErase)
 DEFINE_TEST(TestDriver, TestWatcher)
 {
   StateQueueAgent* _pAgent = GET_RESOURCE(TestDriver, StateQueueAgent*, "state_agent");
+
   std::string address;
   std::string port;
   _pAgent->options().getOption("sqa-control-address", address);
   _pAgent->options().getOption("sqa-control-port", port);
+
   StateQueueClient* pPublisher = GET_RESOURCE(TestDriver, StateQueueClient*, "simple_publisher");
-  StateQueueClient watcher(StateQueueClient::Watcher, "StateQueueDriverTest", address, port, "watcher-data",  false, 1);
+  StateQueueClient watcher(ServiceTypeWatcher, "StateQueueDriverTest", address, port, "watcher-data",  false, 1);
+
   boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
+
   ASSERT_COND(pPublisher->publish("watcher-data-sample", "Hello SQA!", false));
   std::string watcherData;
   std::string eventId;
@@ -262,6 +284,160 @@ DEFINE_TEST(TestDriver, TestMapGetSetPlugin)
   ASSERT_STR_EQ(smap.find("call-id")->second.c_str(), "test-call-id");
 }
 
+//***********************Publisher Tests*****************************************
+
+// Test behavior of publish() when there is no connection to StateQueueAgent
+DEFINE_TEST(TestDriver, TestPublishNoConnection)
+{
+    StateQueueAgent* _pAgent = GET_RESOURCE(TestDriver, StateQueueAgent*, "state_agent");
+
+    std::string address;
+    std::string port;
+    // get the right address but use a wrong port
+    _pAgent->options().getOption("sqa-control-address", address);
+    port="60000";
+
+    StateQueueClient* publisher = new StateQueueClient(ServiceTypePublisher, "TestPublisherPublishNoConnection", address, port, "reg", false, 2);
+    boost::this_thread::sleep(boost::posix_time::milliseconds(100));
+
+    //TEST: publish() should fail
+    ASSERT_COND(!publisher->publish("no-conn-event-id", "no-conn-event-data", false));
+    ASSERT_COND(!publisher->publish("no-conn-event-id", "no-conn-event-data", true));
+
+    delete publisher;
+}
+
+// Test behavior of publish() when used by other types of services
+DEFINE_TEST(TestDriver, TestPublishRestrictionToNonPublishers)
+{
+    StateQueueAgent* _pAgent = GET_RESOURCE(TestDriver, StateQueueAgent*, "state_agent");
+
+    std::string address;
+    std::string port;
+    _pAgent->options().getOption("sqa-control-address", address);
+    _pAgent->options().getOption("sqa-control-port", port);
+
+    //TEST: Worker is not allowed to do publish()
+    StateQueueClient* publisher = new StateQueueClient(ServiceTypeWorker, "TestPublishRestrictionToNonPublishers", address, port, "reg", false, 2);
+    boost::this_thread::sleep(boost::posix_time::milliseconds(100));
+    ASSERT_COND(!publisher->publish("dummy-event-id", "dummy-event-data", false));
+    delete publisher;
+
+    //TEST: Watcher is not allowed to publish()
+    publisher = new StateQueueClient(ServiceTypeWatcher, "TestPublishRestrictionToNonPublishers", address, port, "reg", false, 2);
+    boost::this_thread::sleep(boost::posix_time::milliseconds(100));
+    ASSERT_COND(!publisher->publish("dummy-event-id", "dummy-event-data", false));
+    delete publisher;
+
+    //TODO: Do something with Dealer too
+}
+
+// Test regular behavior of publish()
+DEFINE_TEST(TestDriver, TestPublishRegularBehavior)
+{
+    StateQueueAgent* _pAgent = GET_RESOURCE(TestDriver, StateQueueAgent*, "state_agent");
+
+    std::string address;
+    std::string port;
+    _pAgent->options().getOption("sqa-control-address", address);
+    _pAgent->options().getOption("sqa-control-port", port);
+
+    // Prepare a publisher and a watcher
+    StateQueueClient* publisher = new StateQueueClient(ServiceTypePublisher, "TestPublishRegularBehavior", address, port, "reg", false, 2);
+    StateQueueClient watcher(ServiceTypeWatcher, "StateQueueDriverTest", address, port, "reg",  false, 1);
+    boost::this_thread::sleep(boost::posix_time::milliseconds(100));
+
+    std::string eventId;
+    std::string eventData;
+
+    // TEST: Regular no-response publish / watch should work
+    ASSERT_COND(publisher->publish("reg", "regular-event-data", false));
+    ASSERT_COND(watcher.watch(eventId, eventData));
+    ASSERT_COND(validateId(eventId, ServiceTypePublisher, "reg"));
+    //TODO: Verify that the eventId has the proper format with sqw.eventId.hex4-hex4
+    ASSERT_STR_EQ(eventData, "regular-event-data");
+
+    // TEST: Regular with response publish / watch should work
+    ASSERT_COND(publisher->publish("reg", "regular-event-data", true));
+    ASSERT_COND(watcher.watch(eventId, eventData));
+    ASSERT_COND(validateId(eventId, ServiceTypePublisher, "reg"));
+    ASSERT_STR_EQ(eventData, "regular-event-data");
+
+    // TEST: Empty eventID should not be accepted for publish
+    ASSERT_COND(!(publisher->publish("", "regular-event-data", false)));
+
+    // TEST: Publisher can publish other events too
+    ASSERT_COND(publisher->publish("other", "other-event-data", true));
+    timedTerminateWatcher(100, &watcher);
+    //this watcher should receive the termination request and nothing else
+    ASSERT_COND(watcher.watch(eventId, eventData));
+    ASSERT_STR_EQ(eventId, SQA_TERMINATE_STRING);
+    ASSERT_STR_EQ(eventData, SQA_TERMINATE_STRING);
+
+    delete publisher;
+}
+
+
+// Test regular behavior of an external publish()
+DEFINE_TEST(TestDriver, TestPublishExternalBehavior)
+{
+    StateQueueAgent* _pAgent = GET_RESOURCE(TestDriver, StateQueueAgent*, "state_agent");
+
+    std::string address;
+    std::string port;
+    _pAgent->options().getOption("sqa-control-address", address);
+    _pAgent->options().getOption("sqa-control-port", port);
+
+    // Prepare a publisher and a watcher
+    StateQueueClient* publisher = new StateQueueClient(ServiceTypePublisher, "TestPublishExternalBehavior", address, port, "reg", true, 1);
+    StateQueueClient watcher(ServiceTypeWatcher, "StateQueueDriverTest", address, port, "reg",  false, 1);
+    // Construct a second watcher for all event to watch for unexpected events
+    StateQueueClient watcherAll(ServiceTypeWatcher, "StateQueueDriverTest", address, port, "",  false, 1);
+    boost::this_thread::sleep(boost::posix_time::milliseconds(100));
+
+    std::string eventId;
+    std::string eventData;
+
+    // TEST: Regular no-response publish / watch should work
+    ASSERT_COND(publisher->publish("sqw.reg.1111-2222", "external-event-data", true));
+    ASSERT_COND(watcher.watch(eventId, eventData));
+    // TEST: External publish uses directly the eventId as messageId with no modifications
+    ASSERT_STR_EQ(eventId, "sqw.reg.1111-2222");
+    //TODO: Verify that the eventId has the proper format with sqw.eventId.hex4-hex4
+    ASSERT_STR_EQ(eventData, "external-event-data");
+    // second watcher should get this too
+    ASSERT_COND(watcherAll.watch(eventId, eventData));
+
+    // TEST: Regular with response publish / watch should work (response is ignored for external)
+    ASSERT_COND(publisher->publish("sqw.reg.1111-2222", "external-event-data", false));
+    ASSERT_COND(watcher.watch(eventId, eventData));
+    ASSERT_STR_EQ(eventId, "sqw.reg.1111-2222");
+    //TODO: Verify that the eventId has the proper format with sqw.eventId.hex4-hex4
+    ASSERT_STR_EQ(eventData, "external-event-data");
+    // second watcher should get this too
+    ASSERT_COND(watcherAll.watch(eventId, eventData));
+
+    // TEST: StateQueueAgent will refuse to publish external eventId without proper format
+    ASSERT_COND(!publisher->publish("reg", "external-malformed-event-id-data", false));
+
+    // TEST: Empty eventID does not work for external publisher
+    ASSERT_COND(!(publisher->publish("", "regular-event-data", false)));
+
+    // TEST: None of the events above were published by StateQueueAgent
+    timedTerminateWatcher(200, &watcherAll);
+    //this watcher should receive the termination request and nothing else
+    ASSERT_COND(watcherAll.watch(eventId, eventData));
+    ASSERT_STR_EQ(eventId, SQA_TERMINATE_STRING);
+    ASSERT_STR_EQ(eventData, SQA_TERMINATE_STRING);
+
+    delete publisher;
+}
+
+//TODO: Add terminate() functionality to publisher, add tests for it
+//TODO: Add test  for publish() with empty data
+
+//***********************Publisher Tests*****************************************
+
 bool StateQueueDriverTest::runTests()
 {
   
@@ -275,24 +451,30 @@ bool StateQueueDriverTest::runTests()
   // Define common resource accessible by all unit tests
   //
   DEFINE_RESOURCE(TestDriver, "state_agent", &_agent);
-  DEFINE_RESOURCE(TestDriver, "simple_pop_client", new StateQueueClient(StateQueueClient::Worker, "StateQueueDriverTest", address, port, "reg", false, 2));
-  DEFINE_RESOURCE(TestDriver, "simple_publisher", new StateQueueClient(StateQueueClient::Publisher, "StateQueueDriverTest", address, port, "reg", false, 2));
+  DEFINE_RESOURCE(TestDriver, "simple_pop_client", new StateQueueClient(ServiceTypeWorker, "StateQueueDriverTest", address, port, "reg", false, 2));
+  DEFINE_RESOURCE(TestDriver, "simple_publisher", new StateQueueClient(ServiceTypePublisher, "StateQueueDriverTest", address, port, "reg", false, 2));
 
   boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
   
   //
   // Run the unit tests
   //
-  VERIFY_TEST(TestDriver, TestTimedMap);
-  VERIFY_TEST(TestDriver, TestMapGetSet);
-  VERIFY_TEST(TestDriver, TestMapGetSetPlugin)
-  VERIFY_TEST(TestDriver, TestSimplePop);
-  VERIFY_TEST(TestDriver, TestMultiplePop);
-  VERIFY_TEST(TestDriver, TestGetSetErase);
-  VERIFY_TEST(TestDriver, TestSimplePersistGetErase);
-  VERIFY_TEST(TestDriver, TestWatcher);
-  VERIFY_TEST(TestDriver, TestPublishAndPersist);
-  VERIFY_TEST(TestDriver, TestDealAndPublish)
+//    VERIFY_TEST(TestDriver, TestTimedMap);
+//    VERIFY_TEST(TestDriver, TestMapGetSet);
+//    VERIFY_TEST(TestDriver, TestMapGetSetPlugin)
+//    VERIFY_TEST(TestDriver, TestSimplePop);
+//    VERIFY_TEST(TestDriver, TestMultiplePop);
+//    VERIFY_TEST(TestDriver, TestGetSetErase);
+//    VERIFY_TEST(TestDriver, TestSimplePersistGetErase);
+//    VERIFY_TEST(TestDriver, TestWatcher);
+//    VERIFY_TEST(TestDriver, TestPublishAndPersist);
+//    VERIFY_TEST(TestDriver, TestDealAndPublish)
+
+    VERIFY_TEST(TestDriver, TestPublishNoConnection);
+    VERIFY_TEST(TestDriver, TestPublishRestrictionToNonPublishers);
+    VERIFY_TEST(TestDriver, TestPublishRegularBehavior);
+    VERIFY_TEST(TestDriver, TestPublishExternalBehavior);
+
   //
   // Delete simple_pop_client so it does not participate in popping events
   //

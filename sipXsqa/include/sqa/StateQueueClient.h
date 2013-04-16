@@ -41,16 +41,13 @@
 #define SQA_KEY_MAX 22200	//TODO: This define and its value needs to be documented
 #define SQA_KEEP_ALIVE_TICKS 30
 
+
+//TODO: Make a signin for every connection from the pool. It's not enough to make only one signin
+// every connection must be authentificated somehow, otherwise the server may receive bogus connection.
+
 class StateQueueClient : public boost::enable_shared_from_this<StateQueueClient>, private boost::noncopyable
 {
 public:
-
-  enum Type
-  {
-    Publisher,
-    Worker,
-    Watcher
-  };
 
   class BlockingTcpClient
   {
@@ -459,7 +456,7 @@ public:
   };
 
 protected:
-  Type _type;
+  ServiceType _type;
   typedef boost::recursive_mutex mutex;
   typedef boost::lock_guard<mutex> mutex_lock;
   boost::asio::io_service _ioService;
@@ -477,6 +474,7 @@ protected:
   zmq::socket_t* _zmqSocket;
   boost::thread* _pEventThread;
   std::string _zmqEventId;
+  std::string _rawEventId;
   std::string _applicationId;
   typedef BlockingQueue<std::string> EventQueue;
   EventQueue _eventQueue;
@@ -493,7 +491,7 @@ protected:
 
 public:
   StateQueueClient(
-        Type type,
+        ServiceType type,
         const std::string& applicationId,
         const std::string& serviceAddress,
         const std::string& servicePort,
@@ -530,7 +528,7 @@ public:
     _isAlive(true)
   {
 
-      if (_type != Publisher)
+      if (_type != ServiceTypePublisher)
       {
         _zmqSocket = new zmq::socket_t(*_zmqContext,ZMQ_SUB);
         int linger = SQA_LINGER_TIME_MILLIS; // milliseconds
@@ -553,16 +551,17 @@ public:
       _houseKeepingTimer.async_wait(boost::bind(&StateQueueClient::keepAliveLoop, this, boost::asio::placeholders::error));
       _pIoServiceThread = new boost::thread(boost::bind(&boost::asio::io_service::run, &_ioService));
 
-      if (_type == Watcher)
+      if (_type == ServiceTypeWatcher)
         _zmqEventId = "sqw.";
       else
         _zmqEventId = "sqa.";
 
       _zmqEventId += zmqEventId;
+      _rawEventId = zmqEventId;
 
       OS_LOG_INFO(FAC_NET, "StateQueueClient-" << applicationId <<  " for event " <<  _zmqEventId << " CREATED");
 
-      if (_type != Publisher)
+      if (_type != ServiceTypePublisher)
       {
         _pEventThread = new boost::thread(boost::bind(&StateQueueClient::eventLoop, this));
       }
@@ -574,7 +573,7 @@ public:
   }
 
   StateQueueClient(
-        Type type,
+        ServiceType type,
         const std::string& applicationId,
         const std::string& zmqEventId,
         std::size_t poolSize,
@@ -605,7 +604,8 @@ public:
     _currentKeepAliveTicks(keepAliveTicks),
     _isAlive(true)
   {
-      if (_type != Publisher)
+
+      if (_type != ServiceTypePublisher)
       {
         _zmqSocket = new zmq::socket_t(*_zmqContext,ZMQ_SUB);
         int linger = SQA_LINGER_TIME_MILLIS; // milliseconds
@@ -646,7 +646,7 @@ public:
       _houseKeepingTimer.async_wait(boost::bind(&StateQueueClient::keepAliveLoop, this, boost::asio::placeholders::error));
       _pIoServiceThread = new boost::thread(boost::bind(&boost::asio::io_service::run, &_ioService));
 
-      if (_type == Watcher)
+      if (_type == ServiceTypeWatcher)
         _zmqEventId = "sqw.";
       else
         _zmqEventId = "sqa.";
@@ -655,7 +655,7 @@ public:
 
       OS_LOG_INFO(FAC_NET, "StateQueueClient-" << applicationId <<  " for event " <<  _zmqEventId << " CREATED");
 
-      if (_type != Publisher)
+      if (_type != ServiceTypePublisher)
       {
         _pEventThread = new boost::thread(boost::bind(&StateQueueClient::eventLoop, this));
       }
@@ -788,7 +788,7 @@ public:
 private:
   bool subscribe(const std::string& eventId, const std::string& sqaAddress)
   {
-    assert(_type != Publisher);
+    assert(_type != ServiceTypePublisher);
 
     OS_LOG_INFO(FAC_NET, "StateQueueClient::subscribe eventId=" << eventId << " address=" << sqaAddress);
     try
@@ -806,36 +806,36 @@ private:
 
   bool signin(std::string& publisherAddress)
   {
-    std::ostringstream ss;
-    ss << "sqa.signin."
-       << std::hex << std::uppercase
-       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
-       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
+//    std::ostringstream ss;
+//    ss << "sqa.signin."
+//       << std::hex << std::uppercase
+//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
+//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
+//
+//    std::string id = ss.str();
 
-    std::string id = ss.str();
-
-    StateQueueMessage request;
-    request.setType(StateQueueMessage::Signin);
-    request.set("message-id", id.c_str());
+    StateQueueMessage request(StateQueueMessage::Signin, _type);
+//    request.setType(StateQueueMessage::Signin);
+//    request.set("message-id", id.c_str());
     request.set("message-app-id", _applicationId.c_str());
     request.set("subscription-expires", _subscriptionExpires);
     request.set("subscription-event", _zmqEventId.c_str());
 
     std::string clientType;
-    if (_type == Publisher)
+    if (_type == ServiceTypePublisher)
     {
-      request.set("service-type", SQA_TYPE_PUBLISHER);
-      clientType = SQA_TYPE_PUBLISHER;
+      request.set("service-type", serviceTypeStr[ServiceTypePublisher]);
+      clientType = serviceTypeStr[ServiceTypePublisher];
     }
-    else if (_type == Worker)
+    else if (_type == ServiceTypeWorker)
     {
-      request.set("service-type", SQA_TYPE_WORKER);
-      clientType = SQA_TYPE_WORKER;
+      request.set("service-type", serviceTypeStr[ServiceTypeWorker]);
+      clientType = serviceTypeStr[ServiceTypeWorker];
     }
-    else if (_type == Watcher)
+    else if (_type == ServiceTypeWatcher)
     {
-      request.set("service-type", SQA_TYPE_WATCHER);
-      clientType = SQA_TYPE_WATCHER;
+      request.set("service-type", serviceTypeStr[ServiceTypeWatcher]);
+      clientType = serviceTypeStr[ServiceTypeWatcher];
     }
 
     if (_isExternal)
@@ -864,35 +864,35 @@ private:
 
   bool logout()
   {
-    std::ostringstream ss;
-    ss << "sqa.logout."
-       << std::hex << std::uppercase
-       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
-       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
+//    std::ostringstream ss;
+//    ss << "sqa.logout."
+//       << std::hex << std::uppercase
+//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
+//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
+//
+//    std::string id = ss.str();
 
-    std::string id = ss.str();
-
-    StateQueueMessage request;
-    request.setType(StateQueueMessage::Logout);
-    request.set("message-id", id.c_str());
+    StateQueueMessage request(StateQueueMessage::Logout, _type);
+//    request.setType(StateQueueMessage::Logout);
+//    request.set("message-id", id.c_str());
     request.set("message-app-id", _applicationId.c_str());
     request.set("subscription-event", _zmqEventId.c_str());
 
     std::string clientType;
-    if (_type == Publisher)
+    if (_type == ServiceTypePublisher)
     {
-      request.set("service-type", SQA_TYPE_PUBLISHER);
-      clientType = SQA_TYPE_PUBLISHER;
+      request.set("service-type", ServiceTypePublisher);
+      clientType = ServiceTypePublisher;
     }
-    else if (_type == Worker)
+    else if (_type == ServiceTypeWorker)
     {
-      request.set("service-type", SQA_TYPE_WORKER);
-      clientType = SQA_TYPE_WORKER;
+      request.set("service-type", ServiceTypeWorker);
+      clientType = ServiceTypeWorker;
     }
-    else if (_type == Watcher)
+    else if (_type == ServiceTypeWatcher)
     {
-      request.set("service-type", SQA_TYPE_WATCHER);
-      clientType = SQA_TYPE_WATCHER;
+      request.set("service-type", ServiceTypeWatcher);
+      clientType = ServiceTypeWatcher;
     }
     
     StateQueueMessage response;
@@ -934,7 +934,7 @@ private:
         }
       }
 
-      assert(_type != Publisher);
+      assert(_type != ServiceTypePublisher);
 
       while (!_terminate)
       {
@@ -949,11 +949,11 @@ private:
           OS_LOG_INFO(FAC_NET, "StateQueueClient::eventLoop received event: " << id);
           OS_LOG_DEBUG(FAC_NET, "StateQueueClient::eventLoop received data: " << data);
 
-          if (_type == Worker)
+          if (_type == ServiceTypeWorker)
           {
             OS_LOG_DEBUG(FAC_NET, "StateQueueClient::eventLoop popping data: " << id);
             do_pop(firstHit, count, id, data);
-          }else if (_type == Watcher)
+          }else if (_type == ServiceTypeWatcher)
           {
             OS_LOG_DEBUG(FAC_NET, "StateQueueClient::eventLoop watching data: " << id);
             do_watch(firstHit, count, id, data);
@@ -970,11 +970,11 @@ private:
       }
     }
 
-    if (_type == Watcher)
+    if (_type == ServiceTypeWatcher)
     {
       do_watch(firstHit, 0, SQA_TERMINATE_STRING, SQA_TERMINATE_STRING);
     }
-    else if (_type == Worker)
+    else if (_type == ServiceTypeWorker)
     {
       do_pop(firstHit, 0, SQA_TERMINATE_STRING, SQA_TERMINATE_STRING);
     }
@@ -1083,7 +1083,7 @@ private:
 
   bool readEvent(std::string& id, std::string& data, int& count)
   {
-    assert(_type != Publisher);
+    assert(_type != ServiceTypePublisher);
 
     try
     {
@@ -1229,20 +1229,37 @@ private:
     return false;
   }
 
-  bool enqueue(const std::string& id, const std::string& data, int expires = 30, bool publish= false)
+  bool enqueue(const std::string& eventId, const std::string& data, int expires = 30, bool publish= false)
   {
     //
     // Enqueue it
     //
-    StateQueueMessage enqueueRequest;
+      std::string messageTypeStr;
+    StateQueueMessage::Type messageType = StateQueueMessage::Unknown;
     if (!publish)
-      enqueueRequest.setType(StateQueueMessage::Enqueue);
+    {
+        messageType = StateQueueMessage::Enqueue;
+        messageTypeStr = "Enqueue";
+    }
     else
-      enqueueRequest.setType(StateQueueMessage::EnqueueAndPublish);
-    enqueueRequest.set("message-id", id.c_str());
+    {
+        messageType = StateQueueMessage::EnqueueAndPublish;
+        messageTypeStr = "EnqueueAndPublish";
+    }
+
+    StateQueueMessage enqueueRequest(messageType, _type, eventId);
     enqueueRequest.set("message-app-id", _applicationId.c_str());
     enqueueRequest.set("message-expires", _expires);
     enqueueRequest.set("message-data", data);
+
+    std::string id;
+    enqueueRequest.get("message-id", id);
+    OS_LOG_DEBUG(FAC_NET, "StateQueueClient::enqueue"
+            << " operation: " << messageTypeStr
+            << " message-id: "      << id
+            << " message-app-id: "  << _applicationId
+            << " message-data: "    << data
+            << " message-expires: "    << expires);
 
     StateQueueMessage enqueueResponse;
     if (!sendAndReceive(enqueueRequest, enqueueResponse))
@@ -1269,19 +1286,31 @@ private:
     return true;
   }
 
-  bool internal_publish(const std::string& id, const std::string& data, bool noresponse = false)
+  bool internal_publish(const std::string& eventId, const std::string& data, bool noresponse = false)
   {
-    //
-    // Enqueue it
-    //
-    StateQueueMessage enqueueRequest;
-    enqueueRequest.setType(StateQueueMessage::Publish);
-    enqueueRequest.set("message-id", id.c_str());
+      StateQueueMessage enqueueRequest(StateQueueMessage::Publish);
+
+      std::string id;
+      if (!_isExternal)
+      {
+          generateId(id, _type, eventId);
+      }
+      else
+      {
+          id = eventId;
+      }
+      enqueueRequest.set("message-id", id.c_str());
+
+
     enqueueRequest.set("message-app-id", _applicationId.c_str());
     enqueueRequest.set("message-data", data);
 
+    OS_LOG_DEBUG(FAC_NET, "StateQueueClient::internal_publish "
+            << " message-id: "      << id
+            << " message-app-id: "  << _applicationId
+            << " message-data: "    << data);
 
-    OS_LOG_INFO(FAC_NET, "StateQueueClient::internal_publish " << "publishing data ID=" << id);
+    //TODO: Discussion Do we need response when doing external publsih? I suppose yes.
 
     if (noresponse)
     {
@@ -1301,6 +1330,8 @@ private:
       enqueueResponse.get("message-response", messageResponse);
       if (messageResponse != "ok")
       {
+          std::string id;
+          enqueueResponse.get("message-id", id);
         std::string messageResponseError;
         enqueueResponse.get("message-error", messageResponseError);
         OS_LOG_ERROR(FAC_NET, "StateQueueClient::internal_publish "
@@ -1313,18 +1344,30 @@ private:
     }
   }
 
-  bool internal_publish_and_persist(int workspace, const std::string& id, const std::string& data, int expires)
+public:
+  bool publishAndPersist(int workspace, const std::string& eventId, const std::string& data, int expires)
   {
-    StateQueueMessage enqueueRequest;
-    enqueueRequest.setType(StateQueueMessage::PublishAndPersist);
-    enqueueRequest.set("message-id", id.c_str());
-    enqueueRequest.set("message-data-id", id.c_str());
+    if (_type != ServiceTypePublisher)
+      return false;
+
+    StateQueueMessage enqueueRequest(StateQueueMessage::PublishAndPersist, _type, eventId);
+
+    std::string id;
+    enqueueRequest.get("message-id", id);
+
     enqueueRequest.set("message-app-id", _applicationId.c_str());
+    enqueueRequest.set("message-data-id", id.c_str());
     enqueueRequest.set("message-data", data);
     enqueueRequest.set("message-expires", expires);
     enqueueRequest.set("workspace", workspace);
 
-    OS_LOG_INFO(FAC_NET, "StateQueueClient::internal_publish_and_persist "<< "publishing data ID=" << id);
+    OS_LOG_DEBUG(FAC_NET, "StateQueueClient::publishAndPersist "
+            << " message-id: "      << id
+            << " message-app-id: "  << _applicationId
+            << " message-data-id: " << id
+            << " message-data: "    << data
+            << " message-expires: "    << expires
+            << " workspace: "    << workspace);
 
     StateQueueMessage enqueueResponse;
     if (!sendAndReceive(enqueueRequest, enqueueResponse))
@@ -1370,36 +1413,28 @@ public:
 
   bool enqueue(const std::string& data, int expires = 30, bool publish = false)
   {
-    if (_type != Publisher)
+    if (_type != ServiceTypePublisher)
       return false;
 
-    std::ostringstream ss;
-    ss << _zmqEventId << "."
-       << std::hex << std::uppercase
-       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
-       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
-    return enqueue(ss.str(), data, expires, publish);
+//    std::ostringstream ss;
+//    ss << _zmqEventId << "."
+//       << std::hex << std::uppercase
+//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
+//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
+
+    return enqueue(_rawEventId, data, expires, publish);
   }
 
 
   bool publish(const std::string& eventId, const std::string& data, bool noresponse)
   {
-    if (_type != Publisher)
+    if (_type != ServiceTypePublisher)
       return false;
 
-    std::ostringstream ss;
-    if (!_isExternal)
-    {
-    ss << "sqw." << eventId << "."
-       << std::hex << std::uppercase
-       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
-       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
-    }
-    else
-    {
-        ss << eventId;
-    }
-    return internal_publish(ss.str(), data, noresponse);
+    if (eventId.empty())
+        return false;
+
+    return internal_publish(eventId, data, noresponse);
   }
 
   bool publish(const std::string& eventId, const char* data, int dataLength, bool noresponse)
@@ -1408,23 +1443,23 @@ public:
     return publish(eventId, data, dataLength);
   }
 
-  bool publishAndPersist(int workspace, const std::string& eventId, const std::string& data, int expires)
-  {
-    if (_type != Publisher)
-      return false;
-
-    std::ostringstream ss;
-    ss << "sqw." << eventId;
-    
-    return internal_publish_and_persist(workspace, ss.str(), data, expires);
-  }
+//  bool publishAndPersist(int workspace, const std::string& eventId, const std::string& data, int expires)
+//  {
+//    if (_type != ServiceTypePublisher)
+//      return false;
+//
+//    std::ostringstream ss;
+//    ss << "sqw." << eventId;
+//
+//    return internal_publish_and_persist(workspace, ss.str(), data, expires);
+//  }
 
 
   bool erase(const std::string& id)
   {
-    StateQueueMessage request;
-    request.setType(StateQueueMessage::Erase);
-    request.set("message-id", id.c_str());
+      StateQueueMessage request(StateQueueMessage::Erase, _type);
+//    request.setType(StateQueueMessage::Erase);
+//    request.set("message-id", id.c_str());
     request.set("message-app-id", _applicationId.c_str());
 
     StateQueueMessage response;
@@ -1435,6 +1470,8 @@ public:
     response.get("message-response", messageResponse);
     if (messageResponse != "ok")
     {
+        std::string id;
+        response.get("message-id", id);
       std::string messageResponseError;
       response.get("message-error", messageResponseError);
       OS_LOG_ERROR(FAC_NET, "StateQueueClient::erase "
@@ -1449,17 +1486,17 @@ public:
 
   bool persist(int workspace, const std::string& dataId, int expires)
   {
-    std::ostringstream ss;
-    ss << "sqa.persist."
-       << std::hex << std::uppercase
-       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
-       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
+//    std::ostringstream ss;
+//    ss << "sqa.persist."
+//       << std::hex << std::uppercase
+//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
+//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
     //
     // Enqueue it
     //
-    StateQueueMessage request;
-    request.setType(StateQueueMessage::Persist);
-    request.set("message-id", ss.str().c_str());
+      StateQueueMessage request(StateQueueMessage::Persist, _type);
+//    request.setType(StateQueueMessage::Persist);
+//    request.set("message-id", ss.str().c_str());
     request.set("message-app-id", _applicationId.c_str());
     request.set("message-expires", _expires);
     request.set("workspace", workspace);
@@ -1486,15 +1523,15 @@ public:
 
   bool set(int workspace, const std::string& dataId, const std::string& data, int expires)
   {
-    std::ostringstream ss;
-    ss << "sqa.set."
-       << std::hex << std::uppercase
-       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
-       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
+//    std::ostringstream ss;
+//    ss << "sqa.set."
+//       << std::hex << std::uppercase
+//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
+//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
 
-    StateQueueMessage request;
-    request.setType(StateQueueMessage::Set);
-    request.set("message-id", ss.str().c_str());
+      StateQueueMessage request(StateQueueMessage::Set, _type);
+//    request.setType(StateQueueMessage::Set);
+//    request.set("message-id", ss.str().c_str());
     request.set("message-app-id", _applicationId.c_str());
     request.set("message-expires", _expires);
     request.set("workspace", workspace);
@@ -1522,21 +1559,25 @@ public:
 
   bool mset(int workspace, const std::string& mapId, const std::string& dataId, const std::string& data, int expires)
   {
-    std::ostringstream ss;
-    ss << "sqa.mset."
-       << std::hex << std::uppercase
-       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
-       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
-
-    StateQueueMessage request;
-    request.setType(StateQueueMessage::MapSet);
-    request.set("message-id", ss.str().c_str());
+      StateQueueMessage request(StateQueueMessage::MapSet, _type);
     request.set("message-app-id", _applicationId.c_str());
     request.set("message-expires", _expires);
     request.set("workspace", workspace);
     request.set("message-map-id", mapId.c_str());
     request.set("message-data-id", dataId.c_str());
     request.set("message-data", data);
+
+    std::string id;
+    request.get("message-id", id);
+
+    OS_LOG_DEBUG(FAC_NET, "StateQueueClient::mset "
+            << " message-id: "      << id
+            << " message-app-id: "  << _applicationId
+            << " workspace: "    << workspace
+            << " message-map-id: "    << mapId
+            << " message-data-id: " << dataId
+            << " message-data: "    << data
+            << " message-expires: "    << expires);
 
     StateQueueMessage response;
     if (!sendAndReceive(request, response))
@@ -1559,17 +1600,17 @@ public:
 
   bool get(int workspace, const std::string& dataId, std::string& data)
   {
-    std::ostringstream ss;
-    ss << "sqa.get."
-       << std::hex << std::uppercase
-       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
-       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
+//    std::ostringstream ss;
+//    ss << "sqa.get."
+//       << std::hex << std::uppercase
+//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
+//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
     //
     // Enqueue it
     //
-    StateQueueMessage request;
-    request.setType(StateQueueMessage::Get);
-    request.set("message-id", ss.str().c_str());
+      StateQueueMessage request(StateQueueMessage::Get, _type);
+//    request.setType(StateQueueMessage::Get);
+//    request.set("message-id", ss.str().c_str());
     request.set("message-app-id", _applicationId.c_str());
     request.set("workspace", workspace);
     request.set("message-data-id", dataId.c_str());
@@ -1595,21 +1636,22 @@ public:
 
   bool mget(int workspace, const std::string& mapId, const std::string& dataId, std::string& data)
   {
-    std::ostringstream ss;
-    ss << "sqa.get."
-       << std::hex << std::uppercase
-       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
-       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
-    //
-    // Enqueue it
-    //
-    StateQueueMessage request;
-    request.setType(StateQueueMessage::MapGet);
-    request.set("message-id", ss.str().c_str());
+      StateQueueMessage request(StateQueueMessage::MapGet, _type);
+
     request.set("message-app-id", _applicationId.c_str());
     request.set("workspace", workspace);
     request.set("message-map-id", mapId.c_str());
     request.set("message-data-id", dataId.c_str());
+
+    std::string id;
+    request.get("message-id", id);
+
+    OS_LOG_DEBUG(FAC_NET, "StateQueueClient::mget "
+            << " message-id: "      << id
+            << " message-app-id: "  << _applicationId
+            << " workspace: "    << workspace
+            << " message-map-id: "    << mapId
+            << " message-data-id: " << id);
 
     StateQueueMessage response;
     if (!sendAndReceive(request, response))
@@ -1632,17 +1674,17 @@ public:
 
   bool mgetm(int workspace, const std::string& mapId, std::map<std::string, std::string>& smap)
   {
-    std::ostringstream ss;
-    ss << "sqa.get."
-       << std::hex << std::uppercase
-       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
-       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
+//    std::ostringstream ss;
+//    ss << "sqa.get."
+//       << std::hex << std::uppercase
+//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
+//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
     //
     // Enqueue it
     //
-    StateQueueMessage request;
-    request.setType(StateQueueMessage::MapGetMultiple);
-    request.set("message-id", ss.str().c_str());
+      StateQueueMessage request(StateQueueMessage::MapGetMultiple, _type);
+//    request.setType(StateQueueMessage::MapGetMultiple);
+//    request.set("message-id", ss.str().c_str());
     request.set("message-app-id", _applicationId.c_str());
     request.set("workspace", workspace);
     request.set("message-map-id", mapId.c_str());
@@ -1675,17 +1717,17 @@ public:
 
   bool mgeti(int workspace, const std::string& mapId, const std::string& dataId, std::string& data)
   {
-    std::ostringstream ss;
-    ss << "sqa.get."
-       << std::hex << std::uppercase
-       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
-       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
+//    std::ostringstream ss;
+//    ss << "sqa.get."
+//       << std::hex << std::uppercase
+//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
+//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
     //
     // Enqueue it
     //
-    StateQueueMessage request;
-    request.setType(StateQueueMessage::MapGetInc);
-    request.set("message-id", ss.str().c_str());
+      StateQueueMessage request(StateQueueMessage::MapGetInc, _type);
+//    request.setType(StateQueueMessage::MapGetInc);
+//    request.set("message-id", ss.str().c_str());
     request.set("message-app-id", _applicationId.c_str());
     request.set("workspace", workspace);
     request.set("message-map-id", mapId.c_str());
@@ -1712,17 +1754,17 @@ public:
 
   bool remove(int workspace, const std::string& dataId)
   {
-    std::ostringstream ss;
-    ss << "sqa.remove."
-       << std::hex << std::uppercase
-       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
-       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
+//    std::ostringstream ss;
+//    ss << "sqa.remove."
+//       << std::hex << std::uppercase
+//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
+//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
     //
     // Enqueue it
     //
-    StateQueueMessage request;
-    request.setType(StateQueueMessage::Remove);
-    request.set("message-id", ss.str().c_str());
+    StateQueueMessage request(StateQueueMessage::Remove, _type);
+//    request.setType(StateQueueMessage::Remove);
+//    request.set("message-id", ss.str().c_str());
     request.set("message-app-id", _applicationId.c_str());
     request.set("message-data-id", dataId.c_str());
     request.set("workspace", workspace);

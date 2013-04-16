@@ -104,8 +104,7 @@ bool SQAExternalPublisher::start()
             }
 
             std::ostringstream ss;
-            ss << "ssw-" << std::hex << std::uppercase
-               << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
+            ss << "SQAPublisherExternal-" << mySqaControlAddress << ":" << mySqaControlPort;
 
             SQAPublisher* publisher = new SQAPublisher(ss.str().c_str(), addresses[i].c_str(), ports[i].c_str(), true, 1, 100, 100);
             OS_LOG_AND_ASSERT(publisher, FAC_NET, "SQAExternalPublisher::start"

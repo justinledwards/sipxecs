@@ -16,16 +16,36 @@
 #ifndef SQADEFINES_H_INCLUDED
 #define SQADEFINES_H_INCLUDED
 
-#define SQA_TYPE_INVALID    ""
-#define SQA_TYPE_WATCHER    "watcher"
-#define SQA_TYPE_PUBLISHER  "publisher"
-#define SQA_TYPE_WORKER     "worker"
-#define SQA_TYPE_DEALER     "dealer"
-
 enum SqaClientKind
 {
     SQA_CLIENT_INTERNAL = 0,
     SQA_CLIENT_EXTERNAL,
 };
+
+enum ServiceType
+{
+    ServiceTypeUnknown = 0,
+    ServiceTypePublisher,
+    ServiceTypeDealer,
+    ServiceTypeWorker,
+    ServiceTypeWatcher,
+    ServiceTypeNum,
+};
+
+enum ConnectionEvent
+{
+    ConnectionEventUnknown = 0,
+    ConnectionEventEstablished,
+    ConnectionEventSignin,
+    ConnectionEventKeepAlive,
+    ConnectionEventLogout,
+    ConnectionEventTerminate,
+    ConnectionEventNum,
+};
+
+#define PublisherWatcherPrefix "sqw"
+#define DealerWorkerPrefix "sqa"
+#define UnknownPrefix "unk"
+
 
 #endif //SQADEFINES_H_INCLUDED

@@ -21,10 +21,11 @@
 #include <cstdlib>
 #include <sqa/StateQueueMessage.h>
 
-
 struct StateQueueRecord
 {
   StateQueueRecord() : retry(0), expires(0), watcherData(false){}
+  StateQueueRecord(std::string &_id, std::string &_data, int _expires)
+   : id(_id), data(_data), retry(0), expires(_expires), watcherData(false){}
   std::string id;
   std::string data;
   std::vector<std::string> exclude;

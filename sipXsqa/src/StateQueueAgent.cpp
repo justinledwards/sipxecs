@@ -170,11 +170,14 @@ void StateQueueAgent::onDestroyConnection(StateQueueConnection::Ptr conn)
   if (conn->isAlphaConnection() && !conn->getApplicationId().empty())
   {
     StateQueueRecord record;
-    record.id = "sqw.connection.terminated";
-    record.data = conn->getApplicationId();
-    record.data += "|";
-    record.data += conn->getRemoteAddress();
-    publish(record, conn->isExternalConnection(), false);
+
+    fillConnectionEventRecord(record, *conn, ConnectionEventTerminate);
+
+    OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::onDestroyConnection "
+            << "Publish record: "
+            << " record.id: " << record.id
+            << " record.data: " << record.data);
+    publish(record, conn->isExternalConnection(), true);
   }
 
   _listener.destroyConnection(conn);
@@ -211,11 +214,14 @@ void StateQueueAgent::onIncomingRequest(StateQueueConnection& conn, const char* 
     if (conn.isAlphaConnection() && !conn.isCreationPublished())
     {
       StateQueueRecord record;
-      record.id = "sqw.connection.established";
-      record.data = conn.getApplicationId();
-      record.data += "|";
-      record.data += conn.getRemoteAddress();
-      publish(record, conn.isExternalConnection(), false);
+
+      fillConnectionEventRecord(record, conn, ConnectionEventEstablished);
+
+      OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::onIncomingRequest "
+              << "Publish record: "
+              << " record.id: " << record.id
+              << " record.data: " << record.data);
+      publish(record, conn.isExternalConnection(), true);
       //
       // Mark it as published
       //
@@ -236,11 +242,13 @@ void StateQueueAgent::onIncomingRequest(StateQueueConnection& conn, const char* 
     if (conn.isAlphaConnection())
     {
       StateQueueRecord record;
-      record.id = "sqw.connection.keepalive";
-      record.data = conn.getApplicationId();
-      record.data += "|";
-      record.data += conn.getRemoteAddress();
-      publish(record, conn.isExternalConnection(), false);
+      fillConnectionEventRecord(record, conn, ConnectionEventKeepAlive);
+
+      OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::onIncomingRequest "
+              << "Publish record: "
+              << " record.id: " << record.id
+              << " record.data: " << record.data);
+      publish(record, conn.isExternalConnection(), true);
     }
   }
 
@@ -341,29 +349,68 @@ void StateQueueAgent::handlePing(StateQueueConnection& conn, StateQueueMessage& 
   OS_LOG_DEBUG(FAC_NET, "Keep-alive request received from " << conn.getRemoteAddress() << ":" << conn.getRemotePort());
 }
 
+void StateQueueAgent::fillWorkerEventRecord(
+        StateQueueRecord &record,
+        const std::string &messageId,
+        const std::string &messageData,
+        int expires
+        )
+{
+    record.id = DealerWorkerPrefix;
+    record.id += messageId.substr(3);
+
+    record.expires = expires;
+    record.data = messageData;
+}
+
+void StateQueueAgent::fillWatcherEventRecord(
+        StateQueueRecord &record,
+        const std::string &messageId,
+        const std::string &messageData,
+        int expires
+        )
+{
+    record.id = PublisherWatcherPrefix;
+    record.id += messageId.substr(3);
+
+
+    record.expires = expires;
+    record.data = messageData;
+}
+
+
 void StateQueueAgent::handleEnqueueAndPublish(StateQueueConnection& conn, StateQueueMessage& message,
     const std::string& id, const std::string& appId, bool noExternalPublish)
 {
-  StateQueueRecord record;
-  record.id = id;
-  message.get("message-data", record.data);
-  message.get("message-expires", record.expires);
+    std::string data;
+    int expires = -1;
 
-  OS_LOG_INFO(FAC_NET, "StateQueueAgent::handleEnqueue "
-          << "Received new command ENQUEUE. "
-          << " message-id: " << record.id
-          << " message-expires: " << record.expires);
+    if (!message.get("message-data",  data) || data.empty())
+    {
+        sendErrorResponse(message.getType(), conn, id, "Missing required argument message-data.");
+        return;
+    }
 
-  OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handleEnqueue "
-          << "Received new command ENQUEUE. "
-          << " message-id: " << record.id
-          << " message-data: " << record.data);
+    if (!message.get("message-expires",  expires) || expires <= 0)
+    {
+        sendErrorResponse(message.getType(), conn, id, "Missing required argument expires.");
+        return;
+    }
 
-  enqueue(record);
+    OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handleEnqueueAndPublish "
+            << "Received new command ENQUEUE.AND.PUBLISH "
+            << " message-id: " << id
+            << " message-app-id: " << appId
+            << " message-data: " << data
+            << " message-expires: " << expires);
 
-  record.id = "sqw.";
-  record.id += id.substr(4);
-  publish(record, conn.isExternalConnection(), noExternalPublish);
+    StateQueueRecord record;
+    fillWorkerEventRecord(record, id, data, expires);
+    enqueue(record);
+
+
+    fillWatcherEventRecord(record, id, data, expires);
+    publish(record, conn.isExternalConnection(), noExternalPublish);
 
   StateQueueMessage response;
   response.setType(message.getType());
@@ -374,21 +421,30 @@ void StateQueueAgent::handleEnqueueAndPublish(StateQueueConnection& conn, StateQ
 void StateQueueAgent::handleEnqueue(StateQueueConnection& conn, StateQueueMessage& message,
     const std::string& id, const std::string& appId)
 {
-  StateQueueRecord record;
-  record.id = id;
-  message.get("message-data", record.data);
-  message.get("message-expires", record.expires);
+    std::string data;
+    int expires = 0;
+  if (!message.get("message-data",  data) || data.empty())
+  {
+      sendErrorResponse(message.getType(), conn, id, "Missing required argument message-data.");
+      return;
+  }
 
-  OS_LOG_INFO(FAC_NET, "StateQueueAgent::handleEnqueue "
-          << "Received new command ENQUEUE. "
-          << " message-id: " << record.id
-          << " message-expires: " << record.expires);
+  if (!message.get("message-expires",  expires) || expires <= 0)
+  {
+      sendErrorResponse(message.getType(), conn, id, "Missing required argument expires.");
+      return;
+  }
+
 
   OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handleEnqueue "
-          << "Received new command ENQUEUE. "
-          << " message-id: " << record.id
-          << " message-data: " << record.data);
+          << "Received new command ENQUEUE "
+          << " message-id: " << id
+          << " message-app-id: " << appId
+          << " message-data: " << data
+          << " message-expires: " << expires);
 
+  StateQueueRecord record;
+  fillWorkerEventRecord(record, id, data, expires);
   enqueue(record);
 
   StateQueueMessage response;
@@ -405,8 +461,12 @@ void StateQueueAgent::enqueue(StateQueueRecord& record)
   if (!record.expires)
     record.expires = 30;
 
-  _dataStore.set(this->_queueWorkSpaceIndex, record, record.expires);
+  OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::enqueue"
+        << " record.id: " << record.id
+        << " record.data: " << record.data
+        << " record.expires: " << record.expires);
 
+  _dataStore.set(this->_queueWorkSpaceIndex, record, record.expires);
   _publisher.publish(record);
 }
 
@@ -414,23 +474,38 @@ void StateQueueAgent::enqueue(StateQueueRecord& record)
 void StateQueueAgent::handlePublish(StateQueueConnection& conn, StateQueueMessage& message,
     const std::string& id, const std::string& appId, bool noExternalPublish)
 {
+    std::string data;
+    if (!message.get("message-data",  data) || data.empty())
+    {
+      sendErrorResponse(message.getType(), conn, id, "Missing required argument message-data.");
+      return;
+    }
+
+    if (conn.isExternalConnection())
+    {
+        if (false == validateId(id, ServiceTypePublisher))
+        {
+            sendErrorResponse(message.getType(), conn, id, "Message-id is invalid for an external message.");
+            return;
+        }
+    }
+
+    OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handlePublish "
+            << "Received new command PUBLISH: "
+            << " message-id: " << id
+            << " message-app-id: " << appId
+            << " message-data: " << data);
+
   StateQueueRecord record;
-  record.id = id;
-  message.get("message-data", record.data);
-
-  bool noresponse = false;
-  if (message.get("noresponse", noresponse) && noresponse)
-    noresponse = true;
-  else
-    noresponse = false;
-
-  OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handlePublish "
-          << "Received new command PUBLISH. "
-          << " message-id: " << record.id
-          << " message-data: " << record.data);
+  fillWatcherEventRecord(record, id, data);
 
   publish(record, conn.isExternalConnection(), noExternalPublish);
 
+  bool noresponse = false;
+  if (message.get("noresponse", noresponse) && noresponse)
+  {
+    noresponse = true;
+  }
   if (!noresponse)
   {
     StateQueueMessage response;
@@ -443,7 +518,7 @@ void StateQueueAgent::handlePublish(StateQueueConnection& conn, StateQueueMessag
 void StateQueueAgent::handlePublishAndPersist(StateQueueConnection& conn, StateQueueMessage& message,
     const std::string& id, const std::string& appId, bool noExternalPublish)
 {
-  int expires;
+  int expires = 0;
   if (!message.get("message-expires",  expires) || expires <= 0)
   {
     sendErrorResponse(message.getType(), conn, id, "Missing required argument expires.");
@@ -477,16 +552,22 @@ void StateQueueAgent::handlePublishAndPersist(StateQueueConnection& conn, StateQ
     return;
   }
 
-  StateQueueRecord record;
-  record.data = data;
-  record.id = dataId;
-  record.expires = expires;
-
-  OS_LOG_INFO(FAC_NET, "StateQueueAgent::handleSet "
-          << "Received new command GET. "
+  OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handlePublishAndPersist "
+          << "Received new command PUBLISH AND PERSIST: "
+          << " message-id: " << id
+          << " message-app-id: " << appId
           << " message-data-id: " << dataId
+          << " message-data: " << data
           << " workspace: " << workspace
           << " message-expires: " << expires);
+
+  StateQueueRecord record(dataId, data, expires);
+
+  OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handlePublishAndPersist "
+          << "Will PUBLISH AND PERSIST: "
+          << " record.id: " << id
+          << " record.data: " << data
+          << " record.expires: " << expires);
 
   set(dataId, workspace, record, expires);
 
@@ -509,14 +590,20 @@ void StateQueueAgent::publish(StateQueueRecord& record,  bool isExternalConnecti
 
   record.watcherData = true;
 
+  OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::publish "
+          << " record.id: " << record.id
+          << " record.data: " << record.data
+          << " record.expires: " << record.expires);
+
   _publisher.publish(record);
 
   if (!isExternalConnection // publish only records from internal publishers
           && !noExternalPublish // publish only if it is allowed by the creator of this record
           )
   {
-      OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handlePublish"
+      OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::publish"
               " message received from internal publisher(will publish to externals)");
+
       _externalPublisher.publish(record);
   }
 }
@@ -561,14 +648,14 @@ bool StateQueueAgent::pop(const std::string& appId, const std::string& id, State
 void StateQueueAgent::handlePersist(StateQueueConnection& conn, StateQueueMessage& message,
     const std::string& id, const std::string& appId)
 {
-  int expires;
+  int expires = -1;
   if (!message.get("message-expires",  expires) || expires <= 0)
   {
     sendErrorResponse(message.getType(), conn, id, "Missing required argument expires.");
     return;
   }
 
-  int workspace;
+  int workspace = -1;
   if (!message.get("workspace",  workspace) || workspace < 0)
   {
     sendErrorResponse(message.getType(), conn, id, "Missing required argument workspace.");
@@ -590,6 +677,8 @@ void StateQueueAgent::handlePersist(StateQueueConnection& conn, StateQueueMessag
   
   OS_LOG_INFO(FAC_NET, "StateQueueAgent::handlePersist "
           << "Received new command PERSIST. "
+          << " message-id: " << id
+          << " message-app-id: " << appId
           << " message-data-id: " << dataId
           << " workspace: " << workspace
           << " message-expires: " << expires);
@@ -650,13 +739,12 @@ void StateQueueAgent::handleSet(StateQueueConnection& conn, StateQueueMessage& m
     return;
   }
   
-  StateQueueRecord record;
-  record.data = data;
-  record.id = dataId;
-  record.expires = expires;
+  StateQueueRecord record(dataId, data, expires);
 
   OS_LOG_INFO(FAC_NET, "StateQueueAgent::handleSet "
-          << "Received new command GET. "
+          << "Received new command SET: "
+          << " message-id: " << id
+          << " message-app-id: " << appId
           << " message-data-id: " << dataId
           << " workspace: " << workspace
           << " message-expires: " << expires);
@@ -689,8 +777,9 @@ void StateQueueAgent::handleGet(StateQueueConnection& conn, StateQueueMessage& m
     return;
   }
 
-  OS_LOG_INFO(FAC_NET, "StateQueueAgent::handleGet "
-          << "Received new command GET. "
+  OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handleGet "
+          << " message-id: " << id
+          << " message-app-id: " << appId
           << " message-data-id: " << dataId
           << " workspace: " << workspace);
 
@@ -707,6 +796,10 @@ void StateQueueAgent::handleGet(StateQueueConnection& conn, StateQueueMessage& m
 
 bool StateQueueAgent::get(const std::string& appId, const std::string& dataId, int workspaceId, StateQueueRecord& record)
 {
+    OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::get"
+            << " workspaceId: " << workspaceId
+            << " dataId: " << dataId);
+
   return _dataStore.get(workspaceId, dataId, record);
 }
 
@@ -735,10 +828,12 @@ void StateQueueAgent::handleMapGet(StateQueueConnection& conn, StateQueueMessage
     return;
   }
 
-  OS_LOG_INFO(FAC_NET, "StateQueueAgent::handleGet "
-          << "Received new command GET. "
-          << " message-data-id: " << dataId
-          << " workspace: " << workspace);
+  OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handleMapGet "
+          << " message-id: " << id
+          << " message-app-id: " << appId
+          << " workspace: "    << workspace
+          << " message-map-id: "    << mapId
+          << " message-data-id: " << dataId);
 
 
   StateQueueRecord record;
@@ -754,6 +849,15 @@ void StateQueueAgent::handleMapGet(StateQueueConnection& conn, StateQueueMessage
 bool StateQueueAgent::mget(const std::string& appId, const std::string& mapId,
         const std::string& dataId, int workspaceId, StateQueueRecord& record)
 {
+    OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::mget"
+            << " mapId: " << mapId
+            << " workspaceId: " << workspaceId
+            << " dataId: " << dataId
+          << " record.id: " << record.id
+          << " record.data: " << record.data
+          << " record.expires: " << record.expires);
+
+
   return _dataStore.mapGet(workspaceId, mapId, dataId, record);
 }
 
@@ -777,6 +881,8 @@ void StateQueueAgent::handleMapGetMultiple(StateQueueConnection& conn, StateQueu
 
   OS_LOG_INFO(FAC_NET, "StateQueueAgent::handleGetMultiple "
           << "Received new command GET. "
+          << " message-id: " << id
+          << " message-app-id: " << appId
           << " message-map-id: " << mapId
           << " workspace: " << workspace);
 
@@ -834,6 +940,8 @@ void StateQueueAgent::handleMapGetInc(StateQueueConnection& conn, StateQueueMess
 
   OS_LOG_INFO(FAC_NET, "StateQueueAgent::handleGet "
           << "Received new command GET. "
+          << " message-id: " << id
+          << " message-app-id: " << appId
           << " message-data-id: " << dataId
           << " workspace: " << workspace);
 
@@ -898,15 +1006,15 @@ void StateQueueAgent::handleMapSet(StateQueueConnection& conn, StateQueueMessage
     return;
   }
 
-  StateQueueRecord record;
-  record.data = data;
-  record.id = dataId;
-  record.expires = expires;
+  StateQueueRecord record(dataId, data, expires);
 
-  OS_LOG_INFO(FAC_NET, "StateQueueAgent::handleSet "
-          << "Received new command GET. "
+  OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handleMapSet "
+          << " message-id: " << id
+          << " message-app-id: " << appId
+          << " workspace: "    << workspace
+          << " message-map-id: "    << mapId
           << " message-data-id: " << dataId
-          << " workspace: " << workspace
+          << " message-data: "    << data
           << " message-expires: " << expires);
 
   mset(mapId, workspace, record, expires);
@@ -916,6 +1024,14 @@ void StateQueueAgent::handleMapSet(StateQueueConnection& conn, StateQueueMessage
 
 void StateQueueAgent::mset(const std::string& mapId, int workspaceId, StateQueueRecord& record, int expires)
 {
+    OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::mset"
+            << " mapId: " << mapId
+            << " workspaceId: " << workspaceId
+          << " record.id: " << record.id
+          << " record.data: " << record.data
+          << " record.expires: " << record.expires
+          << " expires: " << expires);
+
   _dataStore.mapSet(workspaceId, mapId, record, expires);
 }
 
@@ -930,6 +1046,8 @@ void StateQueueAgent::handleRemove(StateQueueConnection& conn, StateQueueMessage
 
   OS_LOG_INFO(FAC_NET, "StateQueueAgent::handleGet "
           << "Received new command REMOVE. "
+          << " message-id: " << id
+          << " message-app-id: " << appId
           << " message-data-id: " << id
           << " message-app-id: " << dataId);
 
@@ -961,7 +1079,8 @@ void StateQueueAgent::handleErase(StateQueueConnection& conn, StateQueueMessage&
 {
   OS_LOG_INFO(FAC_NET, "StateQueueAgent::handleErase "
           << "Received new command ERASE. "
-          << "message-id: " << id);
+          << " message-id: " << id
+          << " message-app-id: " << appId);
 
   erase(id);
 
@@ -1012,7 +1131,7 @@ void StateQueueAgent::handleSignin(StateQueueConnection& conn, StateQueueMessage
     return;
   }
 
-  std::string serviceType = SQA_TYPE_INVALID;
+  std::string serviceType;
   if (!message.get("service-type", serviceType))
   {
     sendErrorResponse(message.getType(), conn, id, "Missing required argument service-type.");
@@ -1020,26 +1139,36 @@ void StateQueueAgent::handleSignin(StateQueueConnection& conn, StateQueueMessage
   }
 
   bool externalService = false;
-  if (message.get("external-service", externalService))
+  if (message.get("external-service", externalService) && externalService)
   {
       OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handleSignin"
               " external signin received.");
       conn.markExternalConnection();
   }
 
-  if (SQA_TYPE_WORKER == serviceType)
+  if (serviceTypeStr[ServiceTypeWorker] == serviceType)
     _publisher.addSubscriber(subscriptionEvent, appId, subscriptionExpires);
 
-  OS_LOG_NOTICE(FAC_NET, "StateQueueAgent::handleSignin " << appId << "/" << subscriptionEvent << " RECEIVED");
+  OS_LOG_NOTICE(FAC_NET, "StateQueueAgent::handleSignin "
+          << "Received new command SIGNIN. "
+          << " message-id: " << id
+          << " message-app-id: " << appId
+          << " subscription-event: " << subscriptionEvent
+          << " service-type: " << serviceType
+          << " subscriptionExpires: " << subscriptionExpires
+          << " external-service: " << externalService);
+
   sendOkResponse(message.getType(), conn, id, _publisherAddress);
 
   conn.setApplicationId(appId);
 
   StateQueueRecord record;
-  record.id = "sqw.connection.signin";
-  record.data = conn.getApplicationId();
-  record.data += "|";
-  record.data += conn.getRemoteAddress();
+  fillConnectionEventRecord(record, conn, ConnectionEventSignin);
+
+  OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handleSigin "
+          << "Publish record: "
+          << " record.id: " << record.id
+          << " record.data: " << record.data);
   publish(record, conn.isExternalConnection(), noExternalPublish);
 
 }
@@ -1054,29 +1183,44 @@ void StateQueueAgent::handleLogout(StateQueueConnection& conn, StateQueueMessage
     return;
   }
 
-  std::string serviceType = SQA_TYPE_INVALID;
+  std::string serviceType;
   if (!message.get("service-type", serviceType))
   {
     sendErrorResponse(message.getType(), conn, id, "Missing required argument service-type.");
     return;
   }
 
-  if (SQA_TYPE_WORKER == serviceType)
+  if (serviceTypeStr[ServiceTypeWorker] == serviceType)
     _publisher.removeSubscriber(subscriptionEvent, appId);
 
-  OS_LOG_NOTICE(FAC_NET, "StateQueueAgent::handleLogout " << appId << "/" << subscriptionEvent << " RECEIVED");
+  OS_LOG_NOTICE(FAC_NET, "StateQueueAgent::handleLogout "
+          << "Received new command SIGNIN. "
+          << " message-id: " << id
+          << " message-app-id: " << appId
+          << " subscription-event: " << subscriptionEvent
+          << " service-type: " << serviceType);
 
   sendOkResponse(message.getType(), conn, id, "bfn!");
 
   StateQueueRecord record;
-  record.id = "sqw.connection.logout";
-  record.data = conn.getApplicationId();
-  record.data += "|";
-  record.data += conn.getRemoteAddress();
+  fillConnectionEventRecord(record, conn, ConnectionEventLogout);
 
+  OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handleLogout "
+          << "Publish record: "
+          << " record.id: " << record.id
+          << " record.data: " << record.data);
   publish(record, conn.isExternalConnection(), noExternalPublish);
 }
 
+void StateQueueAgent::fillConnectionEventRecord(
+        StateQueueRecord &record,
+        StateQueueConnection& conn,
+        ConnectionEvent connnectionEvent
+        )
+{
+    generateRecordId(record.id, connnectionEvent);
 
-
-
+    record.data = conn.getApplicationId();
+    record.data += "|";
+    record.data += conn.getRemoteAddress();
+}

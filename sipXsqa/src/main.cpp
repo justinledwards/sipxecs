@@ -29,7 +29,7 @@ int main(int argc, char** argv)
   service.addOptionString("zmq-subscription-port", ": Port where to send subscription for events.");
   service.addOptionString("sqa-control-port", ": Port where to send control commands.");
   service.addOptionString("sqa-control-address", ": Address where to send control commands.");
-//  service.addOptionInt("id", ": Address where to send control commands.");
+  service.addOptionInt("id", ": Address where to send control commands.");
   service.addOptionFlag("test-driver", ": Set this flag if you want to run the driver unit tests to ensure proper operations.");
   
 

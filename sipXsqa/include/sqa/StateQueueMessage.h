@@ -21,7 +21,13 @@
 #include <cassert>
 #include <map>
 #include <string>
+#include <iostream>
+#include <iomanip>
+#include <sstream>
 #include <boost/noncopyable.hpp>
+
+#include "sqa/SQADefines.h"
+#include "sqa/SQAUtils.h"
 
 class StateQueueMessage
 {
@@ -57,6 +63,8 @@ public:
   StateQueueMessage();
   StateQueueMessage(const StateQueueMessage& data);
   StateQueueMessage(Type type);
+  StateQueueMessage(Type type, ServiceType serviceType);
+  StateQueueMessage(Type type, ServiceType serviceType, const std::string &eventId);
   StateQueueMessage(const std::string& rawData);
   ~StateQueueMessage();
 
@@ -64,6 +72,8 @@ public:
 
   Type getType() const;
   void setType(Type type);
+  void setServiceType(ServiceType serviceType);
+  ServiceType getServiceType() const;
   cJSON* object();
 
   bool get(const char* name, std::string& value) const;
@@ -76,13 +86,14 @@ public:
   void set(const char* name, double value);
   void set(const char* name, bool value);
 
-
   std::string data() const;
   bool parseData(const std::string& rawData, bool ignoreType = true);
   bool getMap(std::map<std::string, std::string>& smap);
   void clone(StateQueueMessage& data) const;
+
 protected:
   mutable Type _type;
+  mutable ServiceType _serviceType;
   cJSON* _pObject;
 };
 
@@ -108,6 +119,34 @@ inline StateQueueMessage::StateQueueMessage(Type type) :
 {
   _pObject = cJSON_CreateObject();
   setType(type);
+}
+
+inline StateQueueMessage::StateQueueMessage(Type type, ServiceType serviceType) :
+  _type(type),
+  _serviceType(serviceType),
+  _pObject(0)
+{
+  _pObject = cJSON_CreateObject();
+  setType(type);
+  setServiceType(serviceType);
+
+  std::string id;
+  generateId(id, serviceType, "");
+  set("message-id", id.c_str());
+}
+
+inline StateQueueMessage::StateQueueMessage(Type type, ServiceType serviceType, const std::string &eventId) :
+  _type(type),
+  _serviceType(serviceType),
+  _pObject(0)
+{
+  _pObject = cJSON_CreateObject();
+  setType(type);
+  setServiceType(serviceType);
+
+  std::string id;
+  generateId(id, serviceType, eventId);
+  set("message-id", id.c_str());
 }
 
 inline StateQueueMessage::StateQueueMessage(const std::string& rawData) :
@@ -378,6 +417,68 @@ inline void StateQueueMessage::setType(Type type)
   cJSON_AddItemToObject(_pObject,"message-type", cJSON_CreateString(newType.c_str()));
 }
 
+inline ServiceType StateQueueMessage::getServiceType() const
+{
+    if (!_pObject)
+    {
+        return ServiceTypeUnknown;
+    }
+
+    if (_serviceType != ServiceTypeUnknown && _serviceType < ServiceTypeNum)
+    {
+        return _serviceType;
+    }
+
+    _serviceType = ServiceTypeUnknown;
+    try
+    {
+        cJSON *ssource = cJSON_GetObjectItem(_pObject,"message-serviceType");
+
+        if (ssource || ssource->type != cJSON_String || !ssource->valuestring)
+        {
+            _serviceType = ServiceTypeUnknown;
+        }
+        else
+        {
+            std::string sserviceType = ssource->valuestring;
+            if (sserviceType == serviceTypeStr[ServiceTypePublisher])
+            {
+                _serviceType = ServiceTypePublisher;
+            }
+            else if (sserviceType == serviceTypeStr[ServiceTypeDealer])
+            {
+                _serviceType = ServiceTypeDealer;
+            }
+            else if (sserviceType == serviceTypeStr[ServiceTypeWorker])
+            {
+                _serviceType = ServiceTypeWorker;
+            }
+            else if (sserviceType == serviceTypeStr[ServiceTypeWatcher])
+            {
+                _serviceType = ServiceTypeWatcher;
+            }
+
+        }
+    }catch(...)
+    {
+        //do nothing
+    }
+
+    return _serviceType;
+}
+
+inline void StateQueueMessage::setServiceType(ServiceType serviceType)
+{
+  assert(serviceType < ServiceTypeNum);
+  _serviceType = serviceType;
+
+  assert(_pObject);
+  std::string newServiceType = getServiceTypeStr(serviceType);
+
+  cJSON_DeleteItemFromObject(_pObject, "message-serviceType");
+  cJSON_AddItemToObject(_pObject,"message-serviceType", cJSON_CreateString(newServiceType.c_str()));
+}
+
 inline bool StateQueueMessage::get(const char* name, std::string& value) const
 {
   assert(_pObject);
@@ -480,6 +581,8 @@ inline bool StateQueueMessage::getMap(std::map<std::string, std::string>& smap)
   assert(false);
   return false;
 }
+
+
 
 #endif	/* STATEQUEUEMESSAGE_H */
 

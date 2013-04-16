@@ -26,8 +26,7 @@
 #include <queue>
 #include <cassert>
 #include <boost/thread.hpp>
-#include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/split.hpp>
+#include "SQAUtils.h"
 
 #include "ServiceOptions.h"
 #include "sqaclient.h"
