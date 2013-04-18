@@ -6,5 +6,6 @@
 	<classpathentry kind="con" path="org.eclipse.jdt.junit.JUNIT_CONTAINER/3"/>
 	<classpathentry combineaccessrules="false" kind="src" path="/sipxcommons"/>
 	<classpathentry kind="var" path="SIPX_BUILDDIR/sipXopenfire/presence-plugin/lib/sipx-openfire-presence-plugin.jar" sourcepath="SIPX_SRCDIR/sipXopenfire"/>
+	<classpathentry kind="var" path="SIPX_SRCDIR/sipXcommons/lib/joda-time-2.1.jar"/>
 	<classpathentry kind="output" path="bin.eclipse"/>
 </classpath>
