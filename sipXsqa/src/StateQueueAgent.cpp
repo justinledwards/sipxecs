@@ -194,21 +194,21 @@ void StateQueueAgent::onIncomingRequest(StateQueueConnection& conn, const char* 
   std::string id;
   std::string appId;
 
+  if (!message.get("message-app-id", appId) || appId.empty())
+  {
+    sendErrorResponse(type, conn, id, "Missing required argument message-app-id.");
+    return;
+  }
+
   if (type != StateQueueMessage::Ping)
   {
-    if (!message.get("message-id", id) || id.empty())
-    {
-      OS_LOG_INFO(FAC_NET, packet);
-      sendErrorResponse(message.getType(), conn, "unknown-id", "Missing required argument message-id.");
-      return;
-    }
+      if (!message.get("message-id", id) || id.empty())
+      {
+        OS_LOG_INFO(FAC_NET, packet);
+        sendErrorResponse(message.getType(), conn, "unknown-id", "Missing required argument message-id.");
+        return;
+      }
 
-    if (!message.get("message-app-id", appId) || appId.empty())
-    {
-      sendErrorResponse(type, conn, id, "Missing required argument message-app-id.");
-      return;
-    }
-    
     conn.setApplicationId(appId);
 
     if (conn.isAlphaConnection() && !conn.isCreationPublished())
@@ -217,44 +217,22 @@ void StateQueueAgent::onIncomingRequest(StateQueueConnection& conn, const char* 
 
       fillConnectionEventRecord(record, conn, ConnectionEventEstablished);
 
+      // Publish connection up from client with appId
       OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::onIncomingRequest "
               << "Publish record: "
               << " record.id: " << record.id
               << " record.data: " << record.data);
       publish(record, conn.isExternalConnection(), true);
+
       //
       // Mark it as published
       //
       conn.setCreationPublished();
     }
   }
-  else
-  {
-    //
-    // This is a PING request
-    //
-    if (!message.get("message-app-id", appId) || appId.empty())
-    {
-      sendErrorResponse(type, conn, id, "Missing required argument message-app-id.");
-      return;
-    }
-
-    if (conn.isAlphaConnection())
-    {
-      StateQueueRecord record;
-      fillConnectionEventRecord(record, conn, ConnectionEventKeepAlive);
-
-      OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::onIncomingRequest "
-              << "Publish record: "
-              << " record.id: " << record.id
-              << " record.data: " << record.data);
-      publish(record, conn.isExternalConnection(), true);
-    }
-  }
 
   bool noExternalPublish = false; // by default all messages are allowed to be published externally
-  // check if it was explicitly requested not to publish this externally
-  message.get("message-no-external", noExternalPublish);
+  message.get("message-no-external", noExternalPublish); // was explicitly requested not to publish this externally?
 
   switch (type)
   {
@@ -307,7 +285,7 @@ void StateQueueAgent::onIncomingRequest(StateQueueConnection& conn, const char* 
       handleRemove(conn, message, id, appId);
       break;
     case StateQueueMessage::Ping:
-      handlePing(conn, message);
+      handlePing(conn, message, appId);
       break;
     default:
       sendErrorResponse(type, conn, id, "Invalid Command!");
@@ -341,12 +319,26 @@ void StateQueueAgent::sendOkResponse(StateQueueMessage::Type type, StateQueueCon
   conn.write(response.data());
 }
 
-void StateQueueAgent::handlePing(StateQueueConnection& conn, StateQueueMessage& message)
+void StateQueueAgent::handlePing(StateQueueConnection& conn, StateQueueMessage& message, const std::string& appId)
 {
-  StateQueueMessage response;
-  response.setType(StateQueueMessage::Pong);
-  conn.write(response.data());
-  OS_LOG_DEBUG(FAC_NET, "Keep-alive request received from " << conn.getRemoteAddress() << ":" << conn.getRemotePort());
+    //
+    // This is a PING request
+    //
+    OS_LOG_DEBUG(FAC_NET, "Keep-alive request received from " << conn.getRemoteAddress() << ":" << conn.getRemotePort());
+
+    StateQueueRecord record;
+    fillConnectionEventRecord(record, conn, ConnectionEventKeepAlive);
+
+    // All ping requests are published
+    OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::onIncomingRequest "
+          << "Publish record: "
+          << " record.id: " << record.id
+          << " record.data: " << record.data);
+    publish(record, conn.isExternalConnection(), true);
+
+    StateQueueMessage response;
+    response.setType(StateQueueMessage::Pong);
+    conn.write(response.data());
 }
 
 void StateQueueAgent::fillWorkerEventRecord(
@@ -481,13 +473,10 @@ void StateQueueAgent::handlePublish(StateQueueConnection& conn, StateQueueMessag
       return;
     }
 
-    if (conn.isExternalConnection())
+    if (false == validateId(id, ServiceTypePublisher))
     {
-        if (false == validateId(id, ServiceTypePublisher))
-        {
-            sendErrorResponse(message.getType(), conn, id, "Message-id is invalid for an external message.");
-            return;
-        }
+        sendErrorResponse(message.getType(), conn, id, "Message-id is invalid for an external message.");
+        return;
     }
 
     OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handlePublish "
@@ -506,6 +495,7 @@ void StateQueueAgent::handlePublish(StateQueueConnection& conn, StateQueueMessag
   {
     noresponse = true;
   }
+
   if (!noresponse)
   {
     StateQueueMessage response;
@@ -601,8 +591,8 @@ void StateQueueAgent::publish(StateQueueRecord& record,  bool isExternalConnecti
           && !noExternalPublish // publish only if it is allowed by the creator of this record
           )
   {
-      OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::publish"
-              " message received from internal publisher(will publish to externals)");
+      OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::publish "
+              "will publish to externals");
 
       _externalPublisher.publish(record);
   }
@@ -756,10 +746,8 @@ void StateQueueAgent::handleSet(StateQueueConnection& conn, StateQueueMessage& m
 
 void StateQueueAgent::set(const std::string& dataId, int workspaceId, StateQueueRecord& record, int expires)
 {
-  _cache.erase(dataId);
   _dataStore.set(workspaceId, record, expires);
 }
-
 
 void StateQueueAgent::handleGet(StateQueueConnection& conn, StateQueueMessage& message, const std::string& id, const std::string& appId)
 {

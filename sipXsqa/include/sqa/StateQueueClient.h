@@ -42,9 +42,6 @@
 #define SQA_KEEP_ALIVE_TICKS 30
 
 
-//TODO: Make a signin for every connection from the pool. It's not enough to make only one signin
-// every connection must be authentificated somehow, otherwise the server may receive bogus connection.
-
 class StateQueueClient : public boost::enable_shared_from_this<StateQueueClient>, private boost::noncopyable
 {
 public:
@@ -785,6 +782,52 @@ public:
     }
   }
 
+  bool checkMessageResponse(StateQueueMessage& response)
+  {
+    std::string empty;
+    return checkMessageResponse(response, empty);
+  }
+
+  bool checkMessageResponse(StateQueueMessage& response, const std::string& dataId)
+  {
+      std::string messageResponse;
+      response.get("message-response", messageResponse);
+      if (messageResponse == "ok")
+      {
+          OS_LOG_DEBUG(FAC_NET, "StateQueueClient::checkMessageResponse "
+                        << "Operation successful");
+          return true;
+      }
+      else
+      {
+
+        std::string messageType;
+        response.get("message-type", messageType);
+
+        std::string messageResponseError;
+        response.get("message-error", messageResponseError);
+
+        if (dataId.empty())
+        {
+        std::string id;
+        response.get("message-id", id);
+
+      OS_LOG_ERROR(FAC_NET, "StateQueueClient::checkMessageResponse "
+                    << "Operation '" << messageType << "' failed for id:" << id
+                    << ". Error: " << messageResponseError);
+
+        }
+        else
+        {
+      OS_LOG_ERROR(FAC_NET, "StateQueueClient::checkMessageResponse "
+                    << "Operation '" << messageType << "' failed for dataId:" << dataId
+                    << ". Error: " << messageResponseError);
+        }
+
+        return false;
+      }
+  }
+
 private:
   bool subscribe(const std::string& eventId, const std::string& sqaAddress)
   {
@@ -806,17 +849,8 @@ private:
 
   bool signin(std::string& publisherAddress)
   {
-//    std::ostringstream ss;
-//    ss << "sqa.signin."
-//       << std::hex << std::uppercase
-//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
-//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
-//
-//    std::string id = ss.str();
-
     StateQueueMessage request(StateQueueMessage::Signin, _type);
-//    request.setType(StateQueueMessage::Signin);
-//    request.set("message-id", id.c_str());
+
     request.set("message-app-id", _applicationId.c_str());
     request.set("subscription-expires", _subscriptionExpires);
     request.set("subscription-event", _zmqEventId.c_str());
@@ -864,17 +898,8 @@ private:
 
   bool logout()
   {
-//    std::ostringstream ss;
-//    ss << "sqa.logout."
-//       << std::hex << std::uppercase
-//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
-//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
-//
-//    std::string id = ss.str();
-
     StateQueueMessage request(StateQueueMessage::Logout, _type);
-//    request.setType(StateQueueMessage::Logout);
-//    request.set("message-id", id.c_str());
+
     request.set("message-app-id", _applicationId.c_str());
     request.set("subscription-event", _zmqEventId.c_str());
 
@@ -1271,78 +1296,49 @@ private:
     //
     // Check if Queue is successful
     //
-    std::string messageResponse;
-    enqueueResponse.get("message-response", messageResponse);
-    if (messageResponse != "ok")
-    {
-      std::string messageResponseError;
-      enqueueResponse.get("message-error", messageResponseError);
-      OS_LOG_ERROR(FAC_NET, "StateQueueClient::enqueue "
-                  << "Failed to enqueue " << id
-                  << " Error: " << messageResponseError);
-      return false;
-    }
-
-    return true;
+    return checkMessageResponse(enqueueResponse);
   }
 
-  bool internal_publish(const std::string& eventId, const std::string& data, bool noresponse = false)
-  {
-      StateQueueMessage enqueueRequest(StateQueueMessage::Publish);
-
-      std::string id;
-      if (!_isExternal)
-      {
-          generateId(id, _type, eventId);
-      }
-      else
-      {
-          id = eventId;
-      }
-      enqueueRequest.set("message-id", id.c_str());
-
-
-    enqueueRequest.set("message-app-id", _applicationId.c_str());
-    enqueueRequest.set("message-data", data);
-
-    OS_LOG_DEBUG(FAC_NET, "StateQueueClient::internal_publish "
-            << " message-id: "      << id
-            << " message-app-id: "  << _applicationId
-            << " message-data: "    << data);
-
-    //TODO: Discussion Do we need response when doing external publsih? I suppose yes.
-
-    if (noresponse)
+    bool internal_publish(const std::string& eventId, const std::string& data, bool noresponse = false)
     {
-      enqueueRequest.set("noresponse", noresponse);
-      return sendNoResponse(enqueueRequest);
-    }
-    else
-    {
-      StateQueueMessage enqueueResponse;
-      if (!sendAndReceive(enqueueRequest, enqueueResponse))
-        return false;
+        StateQueueMessage enqueueRequest(StateQueueMessage::Publish);
 
-      //
-      // Check if Queue is successful
-      //
-      std::string messageResponse;
-      enqueueResponse.get("message-response", messageResponse);
-      if (messageResponse != "ok")
-      {
-          std::string id;
-          enqueueResponse.get("message-id", id);
-        std::string messageResponseError;
-        enqueueResponse.get("message-error", messageResponseError);
-        OS_LOG_ERROR(FAC_NET, "StateQueueClient::internal_publish "
-                    << "Failed to publish " << id
-                    << " Error: " << messageResponseError);
-        return false;
-      }
+        std::string messageId;
+        if (!_isExternal)
+        {
+            // For regular publishing message id will be generated from eventId.
+            generateId(messageId, _type, eventId);
+        }
+        else
+        {
+            // For external publishing message id will be eventId.
+            messageId = eventId;
+        }
+        enqueueRequest.set("message-id", messageId.c_str());
 
-      return true;
+
+        enqueueRequest.set("message-app-id", _applicationId.c_str());
+        enqueueRequest.set("message-data", data);
+
+        OS_LOG_DEBUG(FAC_NET, "StateQueueClient::internal_publish "
+                << " message-id: "      << messageId
+                << " message-app-id: "  << _applicationId
+                << " message-data: "    << data);
+
+        if (noresponse)
+        {
+            enqueueRequest.set("noresponse", noresponse);
+            return sendNoResponse(enqueueRequest);
+        }
+        else
+        {
+            StateQueueMessage enqueueResponse;
+            if (!sendAndReceive(enqueueRequest, enqueueResponse))
+                return false;
+
+            return checkMessageResponse(enqueueResponse);
+        }
     }
-  }
 
 public:
   bool publishAndPersist(int workspace, const std::string& eventId, const std::string& data, int expires)
@@ -1376,19 +1372,7 @@ public:
     //
     // Check if Queue is successful
     //
-    std::string messageResponse;
-    enqueueResponse.get("message-response", messageResponse);
-    if (messageResponse != "ok")
-    {
-      std::string messageResponseError;
-      enqueueResponse.get("message-error", messageResponseError);
-      OS_LOG_ERROR(FAC_NET, "StateQueueClient::internal_publish "
-                  << "Failed to publish " << id
-                  << " Error: " << messageResponseError);
-      return false;
-    }
-
-    return true;
+    return checkMessageResponse(enqueueResponse);
   }
 
 
@@ -1415,12 +1399,6 @@ public:
   {
     if (_type != ServiceTypePublisher)
       return false;
-
-//    std::ostringstream ss;
-//    ss << _zmqEventId << "."
-//       << std::hex << std::uppercase
-//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
-//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
 
     return enqueue(_rawEventId, data, expires, publish);
   }
@@ -1458,45 +1436,20 @@ public:
   bool erase(const std::string& id)
   {
       StateQueueMessage request(StateQueueMessage::Erase, _type);
-//    request.setType(StateQueueMessage::Erase);
-//    request.set("message-id", id.c_str());
+
     request.set("message-app-id", _applicationId.c_str());
 
     StateQueueMessage response;
     if (!sendAndReceive(request, response))
       return false;
 
-    std::string messageResponse;
-    response.get("message-response", messageResponse);
-    if (messageResponse != "ok")
-    {
-        std::string id;
-        response.get("message-id", id);
-      std::string messageResponseError;
-      response.get("message-error", messageResponseError);
-      OS_LOG_ERROR(FAC_NET, "StateQueueClient::erase "
-                  << "Failed to erase " << id
-                  << " Error: " << messageResponseError);
-      return false;
-    }
-    OS_LOG_ERROR(FAC_NET, "StateQueueClient::erase "
-                  << "Successfully erased " << id);
-    return true;
+    return checkMessageResponse(response);
   }
 
   bool persist(int workspace, const std::string& dataId, int expires)
   {
-//    std::ostringstream ss;
-//    ss << "sqa.persist."
-//       << std::hex << std::uppercase
-//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
-//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
-    //
-    // Enqueue it
-    //
       StateQueueMessage request(StateQueueMessage::Persist, _type);
-//    request.setType(StateQueueMessage::Persist);
-//    request.set("message-id", ss.str().c_str());
+
     request.set("message-app-id", _applicationId.c_str());
     request.set("message-expires", _expires);
     request.set("workspace", workspace);
@@ -1506,32 +1459,13 @@ public:
     if (!sendAndReceive(request, response))
       return false;
 
-    std::string messageResponse;
-    response.get("message-response", messageResponse);
-    if (messageResponse != "ok")
-    {
-      std::string messageResponseError;
-      response.get("message-error", messageResponseError);
-      OS_LOG_ERROR(FAC_NET, "StateQueueClient::set "
-                  << "Failed to enqueue " << dataId
-                  << " Error: " << messageResponseError);
-      return false;
-    }
-
-    return true;
+    return checkMessageResponse(response, dataId);
   }
 
   bool set(int workspace, const std::string& dataId, const std::string& data, int expires)
   {
-//    std::ostringstream ss;
-//    ss << "sqa.set."
-//       << std::hex << std::uppercase
-//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
-//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
-
       StateQueueMessage request(StateQueueMessage::Set, _type);
-//    request.setType(StateQueueMessage::Set);
-//    request.set("message-id", ss.str().c_str());
+
     request.set("message-app-id", _applicationId.c_str());
     request.set("message-expires", _expires);
     request.set("workspace", workspace);
@@ -1542,19 +1476,7 @@ public:
     if (!sendAndReceive(request, response))
       return false;
 
-    std::string messageResponse;
-    response.get("message-response", messageResponse);
-    if (messageResponse != "ok")
-    {
-      std::string messageResponseError;
-      response.get("message-error", messageResponseError);
-      OS_LOG_ERROR(FAC_NET, "StateQueueClient::set "
-                  << "Failed to enqueue " << dataId
-                  << " Error: " << messageResponseError);
-      return false;
-    }
-
-    return true;
+    return checkMessageResponse(response, dataId);
   }
 
   bool mset(int workspace, const std::string& mapId, const std::string& dataId, const std::string& data, int expires)
@@ -1583,34 +1505,13 @@ public:
     if (!sendAndReceive(request, response))
       return false;
 
-    std::string messageResponse;
-    response.get("message-response", messageResponse);
-    if (messageResponse != "ok")
-    {
-      std::string messageResponseError;
-      response.get("message-error", messageResponseError);
-      OS_LOG_ERROR(FAC_NET, "StateQueueClient::mset "
-                  << "Failed to enqueue " << dataId
-                  << " Error: " << messageResponseError);
-      return false;
-    }
-
-    return true;
+    return checkMessageResponse(response, dataId);
   }
 
   bool get(int workspace, const std::string& dataId, std::string& data)
   {
-//    std::ostringstream ss;
-//    ss << "sqa.get."
-//       << std::hex << std::uppercase
-//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
-//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
-    //
-    // Enqueue it
-    //
       StateQueueMessage request(StateQueueMessage::Get, _type);
-//    request.setType(StateQueueMessage::Get);
-//    request.set("message-id", ss.str().c_str());
+
     request.set("message-app-id", _applicationId.c_str());
     request.set("workspace", workspace);
     request.set("message-data-id", dataId.c_str());
@@ -1619,19 +1520,7 @@ public:
     if (!sendAndReceive(request, response))
       return false;
 
-    std::string messageResponse;
-    response.get("message-response", messageResponse);
-    if (messageResponse != "ok")
-    {
-      std::string messageResponseError;
-      response.get("message-error", messageResponseError);
-      OS_LOG_ERROR(FAC_NET, "StateQueueClient::get "
-                  << "Failed to enqueue " << dataId
-                  << " Error: " << messageResponseError);
-      return false;
-    }
-
-    return response.get("message-data", data);
+    return checkMessageResponse(response, dataId);
   }
 
   bool mget(int workspace, const std::string& mapId, const std::string& dataId, std::string& data)
@@ -1657,34 +1546,13 @@ public:
     if (!sendAndReceive(request, response))
       return false;
 
-    std::string messageResponse;
-    response.get("message-response", messageResponse);
-    if (messageResponse != "ok")
-    {
-      std::string messageResponseError;
-      response.get("message-error", messageResponseError);
-      OS_LOG_ERROR(FAC_NET, "StateQueueClient::mget "
-                  << "Failed to enqueue " << dataId
-                  << " Error: " << messageResponseError);
-      return false;
-    }
-
-    return response.get("message-data", data);
+    return checkMessageResponse(response, dataId);
   }
 
   bool mgetm(int workspace, const std::string& mapId, std::map<std::string, std::string>& smap)
   {
-//    std::ostringstream ss;
-//    ss << "sqa.get."
-//       << std::hex << std::uppercase
-//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
-//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
-    //
-    // Enqueue it
-    //
       StateQueueMessage request(StateQueueMessage::MapGetMultiple, _type);
-//    request.setType(StateQueueMessage::MapGetMultiple);
-//    request.set("message-id", ss.str().c_str());
+
     request.set("message-app-id", _applicationId.c_str());
     request.set("workspace", workspace);
     request.set("message-map-id", mapId.c_str());
@@ -1693,41 +1561,29 @@ public:
     if (!sendAndReceive(request, response))
       return false;
 
-    std::string messageResponse;
-    response.get("message-response", messageResponse);
-    if (messageResponse != "ok")
+    bool ret = checkMessageResponse(response, mapId);
+    if (true == ret)
     {
-      std::string messageResponseError;
-      response.get("message-error", messageResponseError);
-      OS_LOG_ERROR(FAC_NET, "StateQueueClient::mgetm "
-                  << "Failed to enqueue " << mapId
-                  << " Error: " << messageResponseError);
-      return false;
+        std::string data;
+        response.get("message-data", data);
+
+        StateQueueMessage message;
+        if (!message.parseData(data))
+          return false;
+
+        return message.getMap(smap);
     }
 
-    std::string data;
-    response.get("message-data", data);
-
-    StateQueueMessage message;
-    if (!message.parseData(data))
-      return false;
-
-    return message.getMap(smap);
+    return ret;
   }
 
   bool mgeti(int workspace, const std::string& mapId, const std::string& dataId, std::string& data)
   {
-//    std::ostringstream ss;
-//    ss << "sqa.get."
-//       << std::hex << std::uppercase
-//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
-//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
     //
     // Enqueue it
     //
       StateQueueMessage request(StateQueueMessage::MapGetInc, _type);
-//    request.setType(StateQueueMessage::MapGetInc);
-//    request.set("message-id", ss.str().c_str());
+
     request.set("message-app-id", _applicationId.c_str());
     request.set("workspace", workspace);
     request.set("message-map-id", mapId.c_str());
@@ -1737,34 +1593,19 @@ public:
     if (!sendAndReceive(request, response))
       return false;
 
-    std::string messageResponse;
-    response.get("message-response", messageResponse);
-    if (messageResponse != "ok")
+    bool ret = checkMessageResponse(response, dataId);
+    if (true == ret)
     {
-      std::string messageResponseError;
-      response.get("message-error", messageResponseError);
-      OS_LOG_ERROR(FAC_NET, "StateQueueClient::mgeti "
-                  << "Failed to enqueue " << dataId
-                  << " Error: " << messageResponseError);
-      return false;
+        return response.get("message-data", data);
     }
 
-    return response.get("message-data", data);
+    return ret;
   }
 
   bool remove(int workspace, const std::string& dataId)
   {
-//    std::ostringstream ss;
-//    ss << "sqa.remove."
-//       << std::hex << std::uppercase
-//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0)) << "-"
-//       << std::setw(4) << std::setfill('0') << (int) ((float) (0x10000) * random () / (RAND_MAX + 1.0));
-    //
-    // Enqueue it
-    //
     StateQueueMessage request(StateQueueMessage::Remove, _type);
-//    request.setType(StateQueueMessage::Remove);
-//    request.set("message-id", ss.str().c_str());
+
     request.set("message-app-id", _applicationId.c_str());
     request.set("message-data-id", dataId.c_str());
     request.set("workspace", workspace);
@@ -1773,19 +1614,7 @@ public:
     if (!sendAndReceive(request, response))
       return false;
 
-    std::string messageResponse;
-    response.get("message-response", messageResponse);
-    if (messageResponse != "ok")
-    {
-      std::string messageResponseError;
-      response.get("message-error", messageResponseError);
-      OS_LOG_ERROR(FAC_NET, "StateQueueClient::remove "
-                  << "Failed to enqueue " << dataId
-                  << " Error: " << messageResponseError);
-      return false;
-    }
-
-    return true;
+    return checkMessageResponse(response, dataId);
   }
 };
 

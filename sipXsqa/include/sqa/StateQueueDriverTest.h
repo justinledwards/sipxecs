@@ -35,11 +35,14 @@
 class StateQueueDriverTest : boost::noncopyable
 {
 public:
-  StateQueueDriverTest(StateQueueAgent& agent) : _agent(agent){}
+  StateQueueDriverTest(StateQueueAgent& agent, int argc, char** argv) :
+      _agent(agent), _argc(argc), _argv(argv){}
   ~StateQueueDriverTest(){}
   bool runTests();
 protected:
   StateQueueAgent& _agent;
+  int _argc;
+  char **_argv;
 
 };
 

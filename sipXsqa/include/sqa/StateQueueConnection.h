@@ -61,6 +61,8 @@ public:
   void setApplicationId(const std::string& id);
   bool isAlphaConnection() const;
   void setCreationPublished();
+  void abortRead();
+  void initLocalAddressPort();
   bool isCreationPublished() const;
 
   void markExternalConnection();
@@ -92,6 +94,7 @@ protected:
   bool _isAlphaConnection;  /// true if this connection is used for ping-pong
   bool _isCreationPublished;
   bool _isExternalConnection; /// true if this connection remote endpoint is an external SQA Agent
+  bool _freshRead;
 };
 
 

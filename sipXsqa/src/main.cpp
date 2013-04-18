@@ -18,9 +18,20 @@
 #include "sqa/ServiceOptions.h"
 #include "sqa/StateQueueAgent.h"
 #include "sqa/StateQueueDriverTest.h"
+#include "sqa/StateQueueConnection.h"
 
 int main(int argc, char** argv)
 {
+  std::stringstream strm;
+  char a[100] = "1234567890";
+  strm.write(a, 10);
+  char b;
+  std::cout << "size is:" <<  strm.str().size() << std::endl;
+  strm.read((char*)&b, sizeof(b));
+  std::cout << "size is:" <<  strm.str().size() << std::endl;
+
+
+
   ServiceOptions::daemonize(argc, argv);
 
   ServiceOptions service(argc, argv, "StateQueueAgent", "1.0.0", "Copyright Ezuce Inc. (All Rights Reserved)");
@@ -84,7 +95,7 @@ int main(int argc, char** argv)
 
   if (service.hasOption("test-driver"))
   {
-    StateQueueDriverTest test(sqa);
+    StateQueueDriverTest test(sqa, argc, argv);
     if (!test.runTests())
       return -1;
     sqa.stop();

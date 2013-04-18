@@ -124,7 +124,7 @@ public:
     const std::string& id, const std::string& appId);
   void erase(const std::string& id);
 
-  void handlePing(StateQueueConnection& conn, StateQueueMessage& message);
+  void handlePing(StateQueueConnection& conn, StateQueueMessage& message, const std::string& appId);
   
   void onQueueTimeout(const std::string& id, const boost::any& data);
 
