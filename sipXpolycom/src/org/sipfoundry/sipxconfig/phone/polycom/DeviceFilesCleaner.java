@@ -40,7 +40,10 @@ public class DeviceFilesCleaner implements SetupListener {
                     try {
                         m_uploadManager.deleteUpload(upload);
                     } catch (Exception e) {
-                        LOG.warn("An error was thrown when trying to remove a device file.");
+                        LOG.warn(String.format("An error was thrown when trying to remove a device file: %s. "
+                                + "Error message is: %s. Turn on debug to see the error stacktrace.",
+                                upload.getName(), e.getMessage()));
+                        LOG.debug("Device file delete error", e);
                     }
                 }
             }
