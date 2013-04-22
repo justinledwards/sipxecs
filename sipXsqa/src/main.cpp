@@ -22,16 +22,6 @@
 
 int main(int argc, char** argv)
 {
-  std::stringstream strm;
-  char a[100] = "1234567890";
-  strm.write(a, 10);
-  char b;
-  std::cout << "size is:" <<  strm.str().size() << std::endl;
-  strm.read((char*)&b, sizeof(b));
-  std::cout << "size is:" <<  strm.str().size() << std::endl;
-
-
-
   ServiceOptions::daemonize(argc, argv);
 
   ServiceOptions service(argc, argv, "StateQueueAgent", "1.0.0", "Copyright Ezuce Inc. (All Rights Reserved)");
@@ -55,43 +45,8 @@ int main(int argc, char** argv)
     return -1;
   }
 
-  StateQueueAgent sqa(service);
+  StateQueueAgent sqa("dummy", service);
   sqa.run();
-
-#if 0
-  int id = 0;
-  service.getOption("id", id);
-
-  if (id == 1)
-  {
-      std::string address="192.168.13.2";
-      std::string port="5240";
-      SQAPublisher publisher("THEPublisher", address.c_str(), port.c_str(), false, 1, 100, 100);
-      while (1)
-      {
-      boost::this_thread::sleep(boost::posix_time::milliseconds(3000));
-      if (true != publisher.publish("pub", "test-data", true))
-          printf("lol1\n");
-      }
-  }
-  else if (id == 2)
-  {
-      std::string address="192.168.13.2";
-      std::string port="6240";
-
-      SQAWatcher watcher("THEWatcher", address.c_str(), port.c_str(), "", 1, 100, 100);
-
-      while(1)
-      {
-    SQAEvent* pEvent = watcher.watch();
-    if (!pEvent)
-        printf("lol2\n");
-    else
-        printf("%s %s\n", pEvent->id, pEvent->data);
-    delete pEvent;
-      }
-  }
-#endif
 
   if (service.hasOption("test-driver"))
   {

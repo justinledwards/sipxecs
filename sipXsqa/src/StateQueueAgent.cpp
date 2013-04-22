@@ -20,7 +20,8 @@
 
 static const char* REDIS_CHANNEL = REDIS_EVENT_CHANNEL;
 
-StateQueueAgent::StateQueueAgent(ServiceOptions& options) :
+StateQueueAgent::StateQueueAgent(const std::string& agentId, ServiceOptions& options) :
+    _agentId(agentId),
   _options(options),
   _pIoServiceThread(0),
   _ioService(),
@@ -37,20 +38,25 @@ StateQueueAgent::StateQueueAgent(ServiceOptions& options) :
     _options.getOption("zmq-subscription-address", address);
     _options.getOption("zmq-subscription-port", port);
     _publisherAddress.append("tcp://").append(address).append(":").append(port);
-    OS_LOG_INFO(FAC_NET, "StateQueueAgent::StateQueueAgent"
-            " publisher address is:" << _publisherAddress);
+    OS_LOG_INFO(FAC_NET, "StateQueueAgent::StateQueueAgent "
+        << " [" << _agentId << "]"
+        <<" publisher address is:" << _publisherAddress);
 
     OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::StateQueueAgent"
-            " External publisher object CREATED.");
+        << " [" << _agentId << "]"
+        << " External publisher object CREATED.");
 
     OS_LOG_INFO(FAC_NET, "StateQueueAgent::StateQueueAgent"
-            " StateQueueAgent CREATED.");
+        << " [" << _agentId << "]"
+        << " StateQueueAgent CREATED.");
 }
 
 StateQueueAgent::~StateQueueAgent()
 {
   stop();
-  OS_LOG_INFO(FAC_NET, "StateQueueAgent DESTROYED.");
+  OS_LOG_INFO(FAC_NET, "StateQueueAgent::~StateQueueAgent"
+      << " [" << _agentId << "]"
+      << " DESTROYED.");
 }
 
 void StateQueueAgent::run()
@@ -174,7 +180,8 @@ void StateQueueAgent::onDestroyConnection(StateQueueConnection::Ptr conn)
     fillConnectionEventRecord(record, *conn, ConnectionEventTerminate);
 
     OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::onDestroyConnection "
-            << "Publish record: "
+            << " [" << _agentId << "]"
+            << " Publish record: "
             << " record.id: " << record.id
             << " record.data: " << record.data);
     publish(record, conn->isExternalConnection(), true);
@@ -185,7 +192,9 @@ void StateQueueAgent::onDestroyConnection(StateQueueConnection::Ptr conn)
 
 void StateQueueAgent::onIncomingRequest(StateQueueConnection& conn, const char* bytes, std::size_t bytes_transferred)
 {
-  OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::onIncomingRequest processing " << bytes_transferred << " bytes.");
+  OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::onIncomingRequest"
+      << " [" << _agentId << "]"
+      << " processing " << bytes_transferred << " bytes.");
   std::string packet(bytes, bytes_transferred);
   StateQueueMessage message(packet);
   StateQueueMessage::Type type;
@@ -219,7 +228,8 @@ void StateQueueAgent::onIncomingRequest(StateQueueConnection& conn, const char* 
 
       // Publish connection up from client with appId
       OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::onIncomingRequest "
-              << "Publish record: "
+          << " [" << _agentId << "]"
+              << " Publish record: "
               << " record.id: " << record.id
               << " record.data: " << record.data);
       publish(record, conn.isExternalConnection(), true);
@@ -298,7 +308,9 @@ void StateQueueAgent::sendErrorResponse(
   const std::string& messageId,
   const std::string& error)
 {
-  OS_LOG_WARNING(FAC_SIP, "Message-id: " << messageId << " Error: " << error);
+  OS_LOG_WARNING(FAC_SIP, "StateQueueAgent::sendErrorResponse"
+      << " [" << _agentId << "]"
+      << " Message-id: " << messageId << " Error: " << error);
   StateQueueMessage response;
   response.setType(type);
   response.set("message-id", messageId);
@@ -315,7 +327,9 @@ void StateQueueAgent::sendOkResponse(StateQueueMessage::Type type, StateQueueCon
   response.set("message-id", messageId);
   if (!messageData.empty())
     response.set("message-data", messageData);
-  OS_LOG_INFO(FAC_SIP, "Message-id: " << messageId << " Ok: " << messageData);
+  OS_LOG_INFO(FAC_SIP, "StateQueueAgent::sendOkResponse"
+      << " [" << _agentId << "]"
+      << " Message-id: " << messageId << " Ok: " << messageData);
   conn.write(response.data());
 }
 
@@ -324,14 +338,17 @@ void StateQueueAgent::handlePing(StateQueueConnection& conn, StateQueueMessage& 
     //
     // This is a PING request
     //
-    OS_LOG_DEBUG(FAC_NET, "Keep-alive request received from " << conn.getRemoteAddress() << ":" << conn.getRemotePort());
+    OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handlePing"
+        << " [" << _agentId << "]"
+        << " Keep-alive request received from " << conn.getRemoteAddress() << ":" << conn.getRemotePort());
 
     StateQueueRecord record;
     fillConnectionEventRecord(record, conn, ConnectionEventKeepAlive);
 
     // All ping requests are published
     OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::onIncomingRequest "
-          << "Publish record: "
+          << " [" << _agentId << "]"
+          << " Publish record: "
           << " record.id: " << record.id
           << " record.data: " << record.data);
     publish(record, conn.isExternalConnection(), true);
@@ -480,7 +497,8 @@ void StateQueueAgent::handlePublish(StateQueueConnection& conn, StateQueueMessag
     }
 
     OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handlePublish "
-            << "Received new command PUBLISH: "
+        << " [" << _agentId << "]"
+            << " Received new command PUBLISH: "
             << " message-id: " << id
             << " message-app-id: " << appId
             << " message-data: " << data);
@@ -581,6 +599,7 @@ void StateQueueAgent::publish(StateQueueRecord& record,  bool isExternalConnecti
   record.watcherData = true;
 
   OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::publish "
+      << " [" << _agentId << "]"
           << " record.id: " << record.id
           << " record.data: " << record.data
           << " record.expires: " << record.expires);
@@ -1138,7 +1157,8 @@ void StateQueueAgent::handleSignin(StateQueueConnection& conn, StateQueueMessage
     _publisher.addSubscriber(subscriptionEvent, appId, subscriptionExpires);
 
   OS_LOG_NOTICE(FAC_NET, "StateQueueAgent::handleSignin "
-          << "Received new command SIGNIN. "
+      << " [" << _agentId << "]"
+          << " Received new command SIGNIN. "
           << " message-id: " << id
           << " message-app-id: " << appId
           << " subscription-event: " << subscriptionEvent
@@ -1182,7 +1202,8 @@ void StateQueueAgent::handleLogout(StateQueueConnection& conn, StateQueueMessage
     _publisher.removeSubscriber(subscriptionEvent, appId);
 
   OS_LOG_NOTICE(FAC_NET, "StateQueueAgent::handleLogout "
-          << "Received new command SIGNIN. "
+      << " [" << _agentId << "]"
+          << " Received new command SIGNIN. "
           << " message-id: " << id
           << " message-app-id: " << appId
           << " subscription-event: " << subscriptionEvent
@@ -1194,7 +1215,8 @@ void StateQueueAgent::handleLogout(StateQueueConnection& conn, StateQueueMessage
   fillConnectionEventRecord(record, conn, ConnectionEventLogout);
 
   OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handleLogout "
-          << "Publish record: "
+      << " [" << _agentId << "]"
+          << " Publish record: "
           << " record.id: " << record.id
           << " record.data: " << record.data);
   publish(record, conn.isExternalConnection(), noExternalPublish);

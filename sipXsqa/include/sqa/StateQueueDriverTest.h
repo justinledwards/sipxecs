@@ -31,19 +31,60 @@
 #include <boost/bind.hpp>
 #include "TimedMap.h"
 
+#include <iostream>
+#include <string>
+#include <sys/types.h>
+#include <unistd.h>
+#include <stdlib.h>   // Declaration for exit()
+#include <signal.h>
+
+
+
+struct SQAAgentData
+{
+  typedef boost::shared_ptr<SQAAgentData> Ptr;
+
+  std::string id;
+
+  std::string configFilePath;
+  std::string logFilePath;
+
+  std::string sqaControlPort;
+  std::string sqaControlAddress;
+
+  std::string sqaZmqSubscriptionPort;
+  std::string sqaZmqSubscriptionAddress;
+
+  std::string sqaControlPortAll;
+  std::string sqaControlAddressAll;
+
+  pid_t pid;
+
+  SQAAgentData():pid(0) {};
+};
 
 class StateQueueDriverTest : boost::noncopyable
 {
 public:
   StateQueueDriverTest(StateQueueAgent& agent, int argc, char** argv) :
-      _agent(agent), _argc(argc), _argv(argv){}
+      _agent(agent), _argc(argc), _argv(argv), _configFileIdx(0){}
   ~StateQueueDriverTest(){}
   bool runTests();
-protected:
+  void generateSQAConfig(SQAAgentData::Ptr data);
+  void generateLogFile(std::string& logFilePath);
+  void deleteFile(std::string& filePath);
+  void generateSQAAgentCmdline(std::string& agentCmdline);
+
+  void generateSQAAgentData(unsigned int agentNum);
+
+  void startSQAAgent( SQAAgentData::Ptr agentData);
+  void stopSQAAgent( SQAAgentData::Ptr agentData);
+public:
   StateQueueAgent& _agent;
   int _argc;
   char **_argv;
-
+  int _configFileIdx;
+  std::vector<SQAAgentData::Ptr> _agents;
 };
 
 class ThreadedPop : public StateQueueClient

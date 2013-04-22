@@ -692,7 +692,9 @@ public:
       _zmqSocket = 0;
     }
 
-    OS_LOG_INFO(FAC_NET, "StateQueueClient::terminate() waiting for event thread to exit.");
+    OS_LOG_INFO(FAC_NET, "StateQueueClient::terminate "
+        << "[" << _applicationId << "]"
+        << "waiting for event thread to exit.");
     if (_pEventThread)
     {
       _pEventThread->join();
@@ -708,7 +710,9 @@ public:
       _pIoServiceThread = 0;
     }
 
-    OS_LOG_INFO(FAC_NET, "StateQueueClient::terminate() Ok");
+    OS_LOG_INFO(FAC_NET, "StateQueueClient::terminate "
+        << "[" << _applicationId << "]"
+        << "Ok");
   }
 
   void setExpires(int expires) { _expires = expires; }
@@ -740,7 +744,9 @@ public:
       {
         std::string publisherAddress;
         signin(publisherAddress);
-        OS_LOG_INFO(FAC_NET, "StateQueueClient::keepAliveLoop refreshed signin @ " << publisherAddress);
+        OS_LOG_INFO(FAC_NET, "StateQueueClient::keepAliveLoop "
+            << "[" << _applicationId << "]"
+            << "refreshed signin @ " << publisherAddress);
       }
 
       if (!_sleepCount)
@@ -795,7 +801,8 @@ public:
       if (messageResponse == "ok")
       {
           OS_LOG_DEBUG(FAC_NET, "StateQueueClient::checkMessageResponse "
-                        << "Operation successful");
+              << "[" << _applicationId << "]"
+              << "Operation successful");
           return true;
       }
       else
@@ -813,15 +820,17 @@ public:
         response.get("message-id", id);
 
       OS_LOG_ERROR(FAC_NET, "StateQueueClient::checkMessageResponse "
-                    << "Operation '" << messageType << "' failed for id:" << id
-                    << ". Error: " << messageResponseError);
+          << "[" << _applicationId << "]"
+          << "Operation '" << messageType << "' failed for id:" << id
+          << ". Error: " << messageResponseError);
 
         }
         else
         {
       OS_LOG_ERROR(FAC_NET, "StateQueueClient::checkMessageResponse "
-                    << "Operation '" << messageType << "' failed for dataId:" << dataId
-                    << ". Error: " << messageResponseError);
+          << "[" << _applicationId << "]"
+          << "Operation '" << messageType << "' failed for dataId:" << dataId
+          << ". Error: " << messageResponseError);
         }
 
         return false;
@@ -833,7 +842,9 @@ private:
   {
     assert(_type != ServiceTypePublisher);
 
-    OS_LOG_INFO(FAC_NET, "StateQueueClient::subscribe eventId=" << eventId << " address=" << sqaAddress);
+    OS_LOG_INFO(FAC_NET, "StateQueueClient::subscribe "
+        << "[" << _applicationId << "]"
+        << " eventId=" << eventId << " address=" << sqaAddress);
     try
     {
       _zmqSocket->connect(sqaAddress.c_str());
@@ -841,7 +852,9 @@ private:
 
     }catch(std::exception e)
     {
-      OS_LOG_INFO(FAC_NET, "StateQueueClient::subscribe eventId=" << eventId << " address=" << sqaAddress << " FAILED!  Error: " << e.what());
+      OS_LOG_INFO(FAC_NET, "StateQueueClient::subscribe "
+          << "[" << _applicationId << "]"
+          << " eventId=" << eventId << " address=" << sqaAddress << " FAILED!  Error: " << e.what());
       return false;
     }
     return true;
@@ -877,7 +890,9 @@ private:
         request.set("external-service", _isExternal);
     }
 
-    OS_LOG_NOTICE(FAC_NET, "StateQueueClient::signin Type=" << clientType << " SIGNIN");
+    OS_LOG_NOTICE(FAC_NET, "StateQueueClient::signin "
+        << "[" << _applicationId << "]"
+        " Type=" << clientType << " SIGNIN");
 
 
     StateQueueMessage response;
@@ -890,7 +905,9 @@ private:
     {
       _refreshSignin = true;
       _currentSigninTick = _subscriptionExpires * .75;
-      OS_LOG_NOTICE(FAC_NET, "StateQueueClient::signin Type=" << clientType << " SQA=" << publisherAddress << " SUCCEEDED");
+      OS_LOG_NOTICE(FAC_NET, "StateQueueClient::signin "
+          << "[" << _applicationId << "]"
+          << " Type=" << clientType << " SQA=" << publisherAddress << " SUCCEEDED");
     }
 
     return ok;
@@ -937,7 +954,8 @@ private:
       else
       {
         OS_LOG_WARNING(FAC_NET, "StateQueueClient::eventLoop "
-                  << "Network Queue did no respond.  Retrying SIGN IN after " << retryTime << " ms.");
+            << "[" << _applicationId << "]"
+            << " Network Queue did no respond.  Retrying SIGN IN after " << retryTime << " ms.");
         boost::this_thread::sleep(boost::posix_time::milliseconds(retryTime));
       }
     }
@@ -954,7 +972,8 @@ private:
         else
         {
           OS_LOG_ERROR(FAC_NET, "StateQueueClient::eventLoop "
-              << "Is unable to SUBSCRIBE to SQA service @ " << publisherAddress);
+              << "[" << _applicationId << "]"
+              << " Is unable to SUBSCRIBE to SQA service @ " << publisherAddress);
           boost::this_thread::sleep(boost::posix_time::milliseconds(retryTime));
         }
       }
@@ -1006,7 +1025,9 @@ private:
 
     _zmqSocket->close();
 
-    OS_LOG_INFO(FAC_NET, "StateQueueClient::eventLoop TERMINATED.");
+    OS_LOG_INFO(FAC_NET, "StateQueueClient::eventLoop "
+        << "[" << _applicationId << "]"
+        << " TERMINATED.");
   }
 
   void do_pop(bool firstHit, int count, const std::string& id, const std::string& data)
@@ -1313,6 +1334,7 @@ private:
         {
             // For external publishing message id will be eventId.
             messageId = eventId;
+            enqueueRequest.set("message-no-external", true);
         }
         enqueueRequest.set("message-id", messageId.c_str());
 
@@ -1321,6 +1343,7 @@ private:
         enqueueRequest.set("message-data", data);
 
         OS_LOG_DEBUG(FAC_NET, "StateQueueClient::internal_publish "
+                << " [" << _applicationId << "]"
                 << " message-id: "      << messageId
                 << " message-app-id: "  << _applicationId
                 << " message-data: "    << data);
@@ -1616,6 +1639,17 @@ public:
 
     return checkMessageResponse(response, dataId);
   }
+
+  unsigned int getConnectedWorkersNum() { return 0;}
+  bool popEx(std::string& serviceId, std::string& id, std::string &data) {return false;}
+  bool eraseEx(const std::string& serviceId, const std::string& id) {return false;}
+
+  bool getserviceId(const std::string& serviceAddress, const std::string& servicePort, std::string& serviceID)
+  {
+    return false;
+  }
+  bool setEx(const std::string& serviceId, int workspace, const std::string& dataId, const std::string& data, int expires) {return false;}
+  bool getEx(const std::string& serviceId, int workspace, const std::string& dataId, std::string& data) { return false;}
 };
 
 

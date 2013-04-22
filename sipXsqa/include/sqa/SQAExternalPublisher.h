@@ -144,8 +144,9 @@ inline void SQAExternalPublisher::run()
         StateQueueRecord record;
         if (dequeue(record))
         {
-            OS_LOG_DEBUG(FAC_NET, "SQAExternalPublisher::run this: " << this <<
-                    " external publish for record: id:" << record.id << " data:" << record.data);
+            OS_LOG_DEBUG(FAC_NET, "SQAExternalPublisher::run"
+                << " [" << this << "]"
+                << " external publish for record: id:" << record.id << " data:" << record.data);
             external_publish(record);
         }
     }
@@ -159,8 +160,9 @@ inline void SQAExternalPublisher::external_publish(StateQueueRecord& record)
         SQAPublisher *publisher = *it;
         bool ret = publisher->publish(record.id.c_str(), record.data.c_str(), true);
 
-        OS_LOG_DEBUG(FAC_NET, "SQAExternalPublisher::external_publish this: " << this <<
-                " publish result: " << ret );
+        OS_LOG_DEBUG(FAC_NET, "SQAExternalPublisher::external_publish"
+            << " [" << this << "]"
+            << " publish result: " << ret );
     }
 }
 
@@ -179,8 +181,9 @@ inline bool SQAExternalPublisher::dequeue(StateQueueRecord& record)
     record = _queue.front();
     _queue.pop();
 
-    OS_LOG_DEBUG(FAC_NET, "SQAExternalPublisher::dequeue this: " << this <<
-            " dequeued record: id:" << record.id << " data:" << record.data);
+    OS_LOG_DEBUG(FAC_NET, "SQAExternalPublisher::dequeue this: "
+        << " [" << this << "]"
+        << " dequeued record: id:" << record.id << " data:" << record.data);
     return true;
 }
 
@@ -196,13 +199,15 @@ inline void SQAExternalPublisher::publish(const StateQueueRecord& record)
 
     if (_maxQueueSize && _queue.size() > _maxQueueSize)
     {
-        OS_LOG_WARNING(FAC_NET, "SQAExternalPublisher::publish this: " << this <<
-                " queue is overloaded, maxQueueSize " << _maxQueueSize << " was reached");
+        OS_LOG_WARNING(FAC_NET, "SQAExternalPublisher::publish"
+            << " [" << this << "]"
+            << " queue is overloaded, maxQueueSize " << _maxQueueSize << " was reached");
         _queue.pop(); // make room for current record
     }
 
-    OS_LOG_DEBUG(FAC_NET, "SQAExternalPublisher::publish this: " << this <<
-            " enqueued record: id:" << record.id << " data:" << record.data);
+    OS_LOG_DEBUG(FAC_NET, "SQAExternalPublisher::publish this: "
+        << " [" << this << "]"
+        << " enqueued record: id:" << record.id << " data:" << record.data);
 
     _queue.push(record);
     _cond.notify_one();

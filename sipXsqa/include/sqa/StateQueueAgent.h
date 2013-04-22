@@ -37,7 +37,7 @@
 class StateQueueAgent : boost::noncopyable
 {
 public:
-  StateQueueAgent(ServiceOptions& options);
+  StateQueueAgent(const std::string& agentId, ServiceOptions& options);
   ~StateQueueAgent();
   void run();
   void stop();
@@ -143,7 +143,7 @@ protected:
   void onRedisWatcherDisconnect(int status);
 
   
-
+  std::string _agentId;
   ServiceOptions& _options;
   boost::thread* _pIoServiceThread;
   boost::asio::io_service _ioService;

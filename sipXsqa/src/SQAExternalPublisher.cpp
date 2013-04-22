@@ -18,13 +18,15 @@
 
 bool SQAExternalPublisher::start()
 {
-    OS_LOG_DEBUG(FAC_NET, "SQAExternalPublisher::start this: " << this);
+    OS_LOG_DEBUG(FAC_NET, "SQAExternalPublisher::start"
+        << " [" << this << "]");
 
     // use thread handle to see if this was already started
     if (_publishingThread)
     {
-        OS_LOG_NOTICE(FAC_NET, "SQAExternalPublisher::start this: " << this <<
-                " already started");
+        OS_LOG_NOTICE(FAC_NET, "SQAExternalPublisher::start"
+            << " [" << this << "]"
+            << " already started");
         return true;
     }
 

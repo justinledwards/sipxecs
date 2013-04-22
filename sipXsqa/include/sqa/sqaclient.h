@@ -74,6 +74,22 @@ public:
   int id_len;
 };
 
+class SQAEventEx
+{
+public:
+  SQAEventEx();
+  SQAEventEx(const SQAEventEx& data);
+  SQAEventEx(const std::string& workerId_, const std::string& id_, const std::string& data_);
+  ~SQAEventEx();
+
+  char* worker_id;
+  char* id;
+  char* data;
+  int worker_id_len;
+  int id_len;
+  int data_len;
+};
+
 class SQAWatcher
 {
 public:
@@ -222,21 +238,22 @@ class SQAWorker
 public:
   SQAWorker(
     const char* applicationId, // Unique application ID that will identify this watcher to SQA
-    const char* serviceAddress, // The IP address of the SQA
-    const char* servicePort, // The port where SQA is listening for connections
+    const char* serviceAddressAll, // The IP address of the SQA
+    const char* servicePortAll, // The port where SQA is listening for connections
     const char* eventId, // Event ID of the event being watched. Example: "sqa.not"
     int poolSize, // Number of active connections to SQA
     int readTimeout, // read timeout for the control socket
     int writeTimeout // write timeout for the control socket
   );
 
-  SQAWorker(
+  inline SQAWorker(
     const char* applicationId, // Unique application ID that will identify this watcher to SQA
     const char* eventId, // Event ID of the event being watched. Example: "sqa.not"
     int poolSize, // Number of active connections to SQA
     int readTimeout, // read timeout for the control socket
     int writeTimeout // write timeout for the control socket
   );
+
 
   ~SQAWorker();
 
@@ -290,6 +307,64 @@ public:
 
 private:
   SQAWorker(const SQAWorker& copy);
+  uintptr_t _connection;
+};
+
+
+class SQAWorkerMultiService
+{
+public:
+  SQAWorkerMultiService(
+    const char* applicationId, // Unique application ID that will identify this watcher to SQA
+    const char* serviceAddressAll, // The IP address of the SQA
+    const char* servicePortAll, // The port where SQA is listening for connections
+    const char* eventId, // Event ID of the event being watched. Example: "sqa.not"
+    int poolSize, // Number of active connections to SQA
+    int readTimeout, // read timeout for the control socket
+    int writeTimeout // write timeout for the control socket
+  );
+
+  ~SQAWorkerMultiService();
+
+  //
+  // Returns the local IP address of the client
+  //
+  const char* getLocalAddress();
+
+  //
+  // Returns true if the client is connected to SQA
+  //
+  bool isConnected();
+  unsigned int getConnectedWorkersNum();
+
+  //
+  // Returns the id of internal workers
+  //
+  const char* getserviceId(const char* serviceAddress, const char* servicePort);
+
+  //
+  // Returns the next event published by SQA.  This Function
+  // will block if there is no event in queue
+  //
+  SQAEventEx* fetchTask();
+
+  //
+  // Delete the task from the cache.  This must be called after fetchTask()
+  // work is done
+  //
+  void deleteTask(const char* serviceId, const char* id);
+
+  //
+  // Set a value in the event queue workspace
+  //
+  void set(const char* serviceId, int workspace, const char* name, const char* data, int expires);
+  //
+  // Get a value from the event queue workspace
+  //
+  char* get(const char* serviceId, int workspace, const char* name);
+
+private:
+  SQAWorkerMultiService(const SQAWorkerMultiService& copy);
   uintptr_t _connection;
 };
 
@@ -410,6 +485,78 @@ inline SQAEvent::SQAEvent(const SQAEvent& ev)
 
 inline SQAEvent::SQAEvent(const std::string& id_, const std::string& data_)
 {
+  id_len = id_.size();
+  id = new char[id_len + 1];
+  std::copy(id_.begin(), id_.end(), id);
+  id[id_len] = '\0';
+
+  data_len = data_.size();
+  data = new char[data_len + 1];
+  std::copy(data_.begin(), data_.end(), data);
+  data[data_len] = '\0';
+}
+
+//
+// Inline implementation of SQAEvent class
+//
+inline SQAEventEx::SQAEventEx() :
+  worker_id(0),
+  id(0),
+  data(0),
+  worker_id_len(0),
+  id_len(0),
+  data_len(0)
+{
+}
+
+inline SQAEventEx::~SQAEventEx()
+{
+  if (NULL != worker_id)
+  {
+    delete [] worker_id;
+    worker_id = NULL;
+  }
+
+  if (NULL != id)
+  {
+    delete [] id;
+    id = NULL;
+  }
+
+  if (NULL != data)
+  {
+    delete [] data;
+    data = NULL;
+  }
+}
+
+inline SQAEventEx::SQAEventEx(const SQAEventEx& ev)
+{
+  worker_id_len = ev.worker_id_len;
+  worker_id = new char[worker_id_len + 1];
+  ::memcpy(worker_id, ev.worker_id, worker_id_len);
+  worker_id[worker_id_len] = '\0';
+
+
+  id_len = ev.id_len;
+  id = new char[id_len + 1];
+  ::memcpy(id, ev.id, id_len);
+  id[id_len] = '\0';
+
+  data_len = ev.data_len;
+  data = new char[data_len + 1];
+  ::memcpy(data, ev.data, data_len);
+  data[data_len] = '\0';
+}
+
+inline SQAEventEx::SQAEventEx(const std::string& workerId_, const std::string& id_, const std::string& data_)
+{
+  worker_id_len = workerId_.size();
+  worker_id = new char[worker_id_len + 1];
+  std::copy(workerId_.begin(), workerId_.end(), worker_id);
+  worker_id[worker_id_len] = '\0';
+
+
   id_len = id_.size();
   id = new char[id_len + 1];
   std::copy(id_.begin(), id_.end(), id);
@@ -957,6 +1104,107 @@ inline std::map<std::string, std::string> SQAWorker::mgetAll(int workspace, cons
   if (!reinterpret_cast<StateQueueClient*>(_connection)->mgetm(workspace, name, smap));
   return smap;
 }
+
+
+//
+// Inline implementation for SQAWorkerMultiService class
+//
+inline SQAWorkerMultiService::SQAWorkerMultiService(
+  const char* applicationId, // Unique application ID that will identify this watcher to SQA
+  const char* serviceAddressAll, // The IP address of the SQA
+  const char* servicePortAll, // The port where SQA is listening for connections
+  const char* eventId, // Event ID of the event being watched. Example: "sqa.not"
+  int poolSize, // Number of active connections to SQA
+  int readTimeout, // read timeout for the control socket
+  int writeTimeout // write timeout for the control socket
+)
+{
+  _connection = (uintptr_t)(new StateQueueClient(
+          ServiceTypeWorker,
+          applicationId,
+          serviceAddressAll,
+          servicePortAll,
+          eventId,
+          poolSize,
+          readTimeout,
+          writeTimeout));
+}
+
+inline SQAWorkerMultiService::SQAWorkerMultiService(const SQAWorkerMultiService& copy)
+{
+}
+
+inline SQAWorkerMultiService::~SQAWorkerMultiService()
+{
+  delete reinterpret_cast<StateQueueClient*>(_connection);
+}
+
+//
+// Returns the local IP address of the client
+//
+inline const char* SQAWorkerMultiService::getLocalAddress()
+{
+  return reinterpret_cast<StateQueueClient*>(_connection)->getLocalAddress().c_str();
+}
+
+
+inline bool SQAWorkerMultiService::isConnected()
+{
+  return reinterpret_cast<StateQueueClient*>(_connection)->isConnected();
+}
+
+inline unsigned int SQAWorkerMultiService::getConnectedWorkersNum()
+{
+  return reinterpret_cast<StateQueueClient*>(_connection)->getConnectedWorkersNum();
+}
+
+inline SQAEventEx* SQAWorkerMultiService::fetchTask()
+{
+  std::string serviceId;
+  std::string id;
+  std::string data;
+  SQAEventEx* pEvent = 0;
+  if (!reinterpret_cast<StateQueueClient*>(_connection)->popEx(serviceId, id, data))
+    return pEvent;
+
+  pEvent = new SQAEventEx(serviceId, id, data);
+
+  return pEvent;
+}
+
+inline void SQAWorkerMultiService::deleteTask(const char* serviceId, const char* id)
+{
+  reinterpret_cast<StateQueueClient*>(_connection)->eraseEx(serviceId, id);
+}
+
+//
+// Returns the id of internal workers
+//
+inline const char* SQAWorkerMultiService::getserviceId(const char* serviceAddress, const char* servicePort)
+{
+  std::string serviceId;
+  reinterpret_cast<StateQueueClient*>(_connection)->getserviceId(serviceAddress, servicePort, serviceId);
+  return NULL;
+}
+
+inline void SQAWorkerMultiService::set(const char* serviceId, int workspace, const char* name, const char* data, int expires)
+{
+  reinterpret_cast<StateQueueClient*>(_connection)->setEx(serviceId, workspace, name, data, expires);
+}
+  //
+  // Get a value from the event queue workspace
+  //
+inline char* SQAWorkerMultiService::get(const char* serviceId, int workspace, const char* name)
+{
+  std::string data;
+  if (!reinterpret_cast<StateQueueClient*>(_connection)->getEx(serviceId,workspace, name, data))
+    return 0;
+  char* buff = (char*)malloc(data.size() + 1);
+  ::memset(buff, 0x00, data.size() + 1);
+  ::memcpy(buff, data.c_str(), data.size() + 1);
+  return buff;
+}
+
 
 inline SQALogger::SQALogger()
 {

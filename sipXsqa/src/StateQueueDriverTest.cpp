@@ -17,6 +17,12 @@
 #include <iostream>
 #include "sqa/UnitTest.h"
 
+const unsigned int g_defaultSqaControlPort = 6240;
+const unsigned int g_defaultZmqSubscriptionPort = 6242;
+const unsigned int g_portIncrement = 100;
+
+StateQueueDriverTest *g_driver = 0;
+
 void terminateWatcherFunc(StateQueueClient *watcher)
 {
     watcher->terminate();
@@ -445,44 +451,37 @@ DEFINE_TEST(TestDriver, TestPublishToExternalBehavior)
 // Test regular behavior of an external publish()
 DEFINE_TEST(TestDriver, TestPublisherWatcherHA)
 {
-    //start two sqa agents
-  //--config-file /usr/local/sipxecs-local-feature-branch/etc/sipxpbx/sipxsqa-config
-    std::system("/usr/local/sipxecs-local-feature-branch/bin/sipxsqa --sqa-control-port=16240 --zmq-subscription-port=16242 --sqa-control-address=192.168.13.2  --zmq-subscription-address=192.168.13.2 --sqa-control-port--all=15240,16240 --sqa-control-address-all=192.168.13.2,192.168.13.2 --log-file lol2");
-    std::system("/usr/local/sipxecs-local-feature-branch/bin/sipxsqa --sqa-control-port=15240 --zmq-subscription-port=15242 --sqa-control-address=192.168.13.2  --zmq-subscription-address=192.168.13.2 --sqa-control-port--all=15240,16240 --sqa-control-address-all=192.168.13.2,192.168.13.2 --log-file lol1");
+  g_driver->generateSQAAgentData(2);
+  SQAAgentData::Ptr agentData1 = g_driver->_agents[0];
+  SQAAgentData::Ptr agentData2 = g_driver->_agents[1];
 
+  g_driver->startSQAAgent(agentData1);
+  g_driver->startSQAAgent(agentData2);
 
-    StateQueueAgent* _pAgent = GET_RESOURCE(TestDriver, StateQueueAgent*, "state_agent");
+  // prepare publishers to local and remote for events of type "reg"
+  StateQueueClient publisher1(ServiceTypePublisher, "PublisherLocal", agentData1->sqaControlAddress, agentData1->sqaControlPort, "reg", false, 1);
+  // prepare watchers to local and remote for events of type "reg"
 
-    std::string address1 = "192.168.13.2";
-    std::string port1 = "15240";
+  StateQueueClient watcher2(ServiceTypeWatcher, "WatcherRemote", agentData2->sqaControlAddress, agentData2->sqaControlPort, "reg",  false, 1);
+  // prepare watchers to local and remote for all kind of events
+  //StateQueueClient watcherAll2(ServiceTypeWatcher, "WatcherRemoteAll", agentData2->sqaControlAddress, agentData2->sqaControlPort, "",  false, 1);
 
-    std::string address2 = "192.168.13.2";
-    std::string port2 = "16240";
+  boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
 
-    // prepare publishers to local and remote for events of type "reg"
-    StateQueueClient* publisherLocal = new StateQueueClient(ServiceTypePublisher, "PublisherLocal", address1, port1, "reg", true, 1);
-    // prepare watchers to local and remote for events of type "reg"
-    StateQueueClient watcherRemote(ServiceTypeWatcher, "WatcherRemote", address2, port2, "reg",  false, 1);
-    // prepare watchers to local and remote for all kind of events
-    StateQueueClient watcherRemoteAll(ServiceTypeWatcher, "WatcherRemoteAll", address2, port2, "",  false, 1);
+  std::string eventId;
+  std::string eventData;
 
-    boost::this_thread::sleep(boost::posix_time::milliseconds(100));
-
-    std::string eventId;
-    std::string eventData;
-
-    // TEST: Regular no-response publish / watch should work
-    ASSERT_COND(publisherLocal->publish("reg.1", "reg-data-1", true));
-    ASSERT_COND(watcherRemote.watch(eventId, eventData));
+  // TEST: Regular no-response publish / watch should work
+  ASSERT_COND(publisher1.publish("reg.1", "reg-data-1", true));
+  ASSERT_COND(watcher2.watch(eventId, eventData));
+  // TEST: External publish uses directly the eventId as messageId with no modifications
+  ASSERT_STR_EQ(eventId, "sqw.reg.1");
+  //TODO: Verify that the eventId has the proper format with sqw.eventId.hex4-hex4
+  ASSERT_STR_EQ(eventData, "reg-data-1");
+  // second watcher should get this too
+  //ASSERT_COND(watcherAll.watch(eventId, eventData));
 
 #if 0
-    // TEST: External publish uses directly the eventId as messageId with no modifications
-    ASSERT_STR_EQ(eventId, "sqw.reg.1");
-    //TODO: Verify that the eventId has the proper format with sqw.eventId.hex4-hex4
-    ASSERT_STR_EQ(eventData, "reg-data-1");
-    // second watcher should get this too
-    ASSERT_COND(watcherAll.watch(eventId, eventData));
-
     // TEST: Regular with response publish / watch should work (response is ignored for external)
     ASSERT_COND(publisher->publish("sqw.reg.1111-2222", "external-event-data", false));
     ASSERT_COND(watcher.watch(eventId, eventData));
@@ -505,14 +504,12 @@ DEFINE_TEST(TestDriver, TestPublisherWatcherHA)
     ASSERT_STR_EQ(eventId, SQA_TERMINATE_STRING);
     ASSERT_STR_EQ(eventData, SQA_TERMINATE_STRING);
 #endif
-
-    delete publisherLocal;
 }
 
 
 bool StateQueueDriverTest::runTests()
 {
-  
+  g_driver = this;
   std::string address;
   std::string port;
 
@@ -533,23 +530,23 @@ bool StateQueueDriverTest::runTests()
   //
   // Run the unit tests
   //
-    VERIFY_TEST(TestDriver, TestTimedMap);
-    VERIFY_TEST(TestDriver, TestMapGetSet);
-    VERIFY_TEST(TestDriver, TestMapGetSetPlugin)
-    VERIFY_TEST(TestDriver, TestSimplePop);
-    VERIFY_TEST(TestDriver, TestMultiplePop);
-    VERIFY_TEST(TestDriver, TestGetSetErase);
-    VERIFY_TEST(TestDriver, TestSimplePersistGetErase);
-    VERIFY_TEST(TestDriver, TestWatcher);
-    VERIFY_TEST(TestDriver, TestPublishAndPersist);
-    VERIFY_TEST(TestDriver, TestDealAndPublish)
+//    VERIFY_TEST(TestDriver, TestTimedMap);
+//    VERIFY_TEST(TestDriver, TestMapGetSet);
+//    VERIFY_TEST(TestDriver, TestMapGetSetPlugin)
+//    VERIFY_TEST(TestDriver, TestSimplePop);
+//    VERIFY_TEST(TestDriver, TestMultiplePop);
+//    VERIFY_TEST(TestDriver, TestGetSetErase);
+//    VERIFY_TEST(TestDriver, TestSimplePersistGetErase);
+//    VERIFY_TEST(TestDriver, TestWatcher);
+//    VERIFY_TEST(TestDriver, TestPublishAndPersist);
+//    VERIFY_TEST(TestDriver, TestDealAndPublish)
 
 //    VERIFY_TEST(TestDriver, TestPublishNoConnection);
 //    VERIFY_TEST(TestDriver, TestPublishRestrictionToNonPublishers);
 //    VERIFY_TEST(TestDriver, TestPublishRegularBehavior);
 //    VERIFY_TEST(TestDriver, TestPublishToExternalBehavior);
 
-//    VERIFY_TEST(TestDriver, TestPublisherWatcherHA);
+    VERIFY_TEST(TestDriver, TestPublisherWatcherHA);
 
   //
   // Delete simple_pop_client so it does not participate in popping events
@@ -569,3 +566,141 @@ bool StateQueueDriverTest::runTests()
   return TEST_RESULT(TestDriver);
 }
 
+void StateQueueDriverTest::generateSQAConfig(SQAAgentData::Ptr data)
+{
+  std::ofstream ofs(data->configFilePath.data(), std::ios_base::trunc | std::ios_base::in);
+
+  ofs << "log-level=7" << "\n"
+      << "sqa-control-port=" << data->sqaControlPort << "\n"
+      << "zmq-subscription-port=" << data->sqaZmqSubscriptionPort << "\n"
+      << "sqa-control-address=" << data->sqaControlAddress << "\n"
+      << "zmq-subscription-address=" << data->sqaZmqSubscriptionAddress <<"\n"
+      << "sqa-control-port-all=" << data->sqaControlPortAll << "\n"
+      << "sqa-control-address-all=" << data->sqaControlAddressAll << "\n";
+}
+
+void StateQueueDriverTest::deleteFile(std::string& filePath)
+{
+  //TBD
+}
+
+void StateQueueDriverTest::startSQAAgent(SQAAgentData::Ptr agentData)
+{
+  const char *argv[5];
+  argv[0] = _argv[0];
+  argv[1] = "--config-file";
+  argv[2] = agentData->configFilePath.data();
+  argv[3] = "--log-file";
+  argv[4] = agentData->logFilePath.data();
+
+  int argc = 5;
+
+  ServiceOptions service(argc, (char**)argv, "StateQueueAgent", "1.0.0", "Copyright Ezuce Inc. (All Rights Reserved)");
+  service.addDaemonOptions();
+  service.addOptionString("zmq-subscription-address", ": Address where to subscribe for events.");
+  service.addOptionString("zmq-subscription-port", ": Port where to send subscription for events.");
+  service.addOptionString("sqa-control-port", ": Port where to send control commands.");
+  service.addOptionString("sqa-control-address", ": Address where to send control commands.");
+
+  if (!service.parseOptions() ||
+          !service.hasOption("zmq-subscription-address") ||
+          !service.hasOption("zmq-subscription-port") ||
+          !service.hasOption("sqa-control-port") ||
+          !service.hasOption("sqa-control-address") )
+  {
+    service.displayUsage(std::cerr);
+    return ;
+  }
+
+  pid_t pid = fork();
+  if (pid == 0)                // child
+  {
+  // Code only executed by child process
+    StateQueueAgent sqa(agentData->id, service);
+    sqa.run();
+
+    service.waitForTerminationRequest();
+    exit(1);
+  }
+  else if (pid < 0)            // failed to fork
+  {
+    exit(1);
+  }
+  else                                   // parent
+  {
+    agentData->pid = pid;
+    boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
+  }
+}
+
+void StateQueueDriverTest::stopSQAAgent(SQAAgentData::Ptr data)
+{
+
+  if (data->pid > 0)
+  {
+    kill(data->pid, SIGTERM);
+    boost::this_thread::sleep(boost::posix_time::milliseconds(100));
+    kill(data->pid, SIGTERM);
+  }
+}
+
+void StateQueueDriverTest::generateSQAAgentData(unsigned int agentsNum)
+{
+  std::string sqaControlAddressAll;
+  std::string sqaControlPortAll;
+
+  for (unsigned int i = 0; i < agentsNum; i++)
+  {
+    SQAAgentData::Ptr data = SQAAgentData::Ptr(new SQAAgentData());
+
+    {
+      std::stringstream strm;
+      strm << "Agent" << i;
+      data->id = strm.str();
+    }
+
+    {
+      std::stringstream strm;
+      strm << (g_defaultSqaControlPort + g_portIncrement * i);
+      data->sqaControlPort = strm.str();
+    }
+    {
+      std::stringstream strm;
+      strm << (g_defaultZmqSubscriptionPort + g_portIncrement * i);
+      data->sqaZmqSubscriptionPort = strm.str();
+    }
+
+    data->sqaControlAddress = "192.168.13.2";
+    data->sqaZmqSubscriptionAddress = "192.168.13.2";
+
+    {
+      std::stringstream strm;
+      strm << "sipxsqa-config-" << i;
+      data->configFilePath = strm.str();
+    }
+
+    {
+      std::stringstream strm;
+      strm << "sipxsqa.log-";// << i;
+      data->logFilePath = strm.str();
+    }
+
+    sqaControlAddressAll += data->sqaControlAddress + ",";
+    sqaControlPortAll += data->sqaControlPort + ",";
+
+    _agents.push_back(data);
+  }
+
+  std::vector<SQAAgentData::Ptr>::iterator it;
+  for (it = _agents.begin(); it != _agents.end(); it++)
+  {
+    SQAAgentData::Ptr data = *it;
+
+    data->sqaControlPortAll = sqaControlPortAll;
+    data->sqaControlAddressAll = sqaControlAddressAll;
+
+    generateSQAConfig(data);
+  }
+
+
+}
