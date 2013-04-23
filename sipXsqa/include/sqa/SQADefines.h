@@ -16,22 +16,6 @@
 #ifndef SQADEFINES_H_INCLUDED
 #define SQADEFINES_H_INCLUDED
 
-enum SqaClientKind
-{
-    SQA_CLIENT_INTERNAL = 0,
-    SQA_CLIENT_EXTERNAL,
-};
-
-enum ServiceType
-{
-    ServiceTypeUnknown = 0,
-    ServiceTypePublisher,
-    ServiceTypeDealer,
-    ServiceTypeWorker,
-    ServiceTypeWatcher,
-    ServiceTypeNum,
-};
-
 enum ConnectionEvent
 {
     ConnectionEventUnknown = 0,

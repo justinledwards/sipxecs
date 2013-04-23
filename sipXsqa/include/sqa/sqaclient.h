@@ -582,12 +582,11 @@ inline SQAWatcher::SQAWatcher(
 )
 {
   _connection = (uintptr_t)(new StateQueueClient(
-          ServiceTypeWatcher,
+          SQAUtil::ServiceWatcher,
           applicationId,
           serviceAddress,
           servicePort,
           eventId,
-          false,
           poolSize,
           readTimeout,
           writeTimeout));
@@ -602,10 +601,9 @@ inline SQAWatcher::SQAWatcher(
 )
 {
   _connection = (uintptr_t)(new StateQueueClient(
-          ServiceTypeWatcher,
+          SQAUtil::ServiceWatcher,
           applicationId,
           eventId,
-          false,
           poolSize,
           readTimeout,
           writeTimeout));
@@ -708,7 +706,7 @@ inline std::map<std::string, std::string> SQAWatcher::mgetAll(int workspace, con
 }
 
 //
-// Inline implmentation of the SQA ServiceTypePublisher class
+// Inline implmentation of the SQA Publisher class
 //
 inline SQAPublisher::SQAPublisher(
   const char* applicationId, // Unique application ID that will identify this watcher to SQA
@@ -720,14 +718,14 @@ inline SQAPublisher::SQAPublisher(
   int writeTimeout // write timeout for the control socket
 )
 {
+  int externalSpec = (isExternal) ? SQAUtil::ServiceSpecExternal : 0;
   _connection = (uintptr_t)(new StateQueueClient(
-          ServiceTypePublisher,
+          SQAUtil::ServicePublisher | externalSpec,
           applicationId,
           serviceAddress,
           servicePort,
-          serviceTypeStr[ServiceTypePublisher],
+          SQAUtil::getServiceTypeStr(SQAUtil::ServicePublisher),
           isExternal,
-          poolSize,
           readTimeout,
           writeTimeout));
 }
@@ -740,9 +738,9 @@ inline SQAPublisher::SQAPublisher(
 )
 {
   _connection = (uintptr_t)(new StateQueueClient(
-          ServiceTypePublisher,
+          SQAUtil::ServicePublisher,
           applicationId,
-          serviceTypeStr[ServiceTypePublisher],
+          SQAUtil::getServiceTypeStr(SQAUtil::ServicePublisher),
           poolSize,
           readTimeout,
           writeTimeout));
@@ -852,12 +850,11 @@ inline SQADealer::SQADealer(
 )
 {
   _connection = (uintptr_t)(new StateQueueClient(
-          ServiceTypePublisher,
+          SQAUtil::ServiceDealer,
           applicationId,
           serviceAddress,
           servicePort,
           eventId,
-          false,
           poolSize,
           readTimeout,
           writeTimeout));
@@ -872,10 +869,9 @@ inline SQADealer::SQADealer(
 )
 {
   _connection = (uintptr_t)(new StateQueueClient(
-          ServiceTypePublisher,
+          SQAUtil::ServiceDealer,
           applicationId,
           eventId,
-          false,
           poolSize,
           readTimeout,
           writeTimeout));
@@ -981,12 +977,11 @@ inline SQAWorker::SQAWorker(
 )
 {
   _connection = (uintptr_t)(new StateQueueClient(
-          ServiceTypeWorker,
+          SQAUtil::ServiceWorker,
           applicationId,
           serviceAddress,
           servicePort,
           eventId,
-          false,
           poolSize,
           readTimeout,
           writeTimeout));
@@ -1001,10 +996,9 @@ inline SQAWorker::SQAWorker(
 )
 {
   _connection = (uintptr_t)(new StateQueueClient(
-          ServiceTypeWorker,
+          SQAUtil::ServiceWorker,
           applicationId,
           eventId,
-          false,
           poolSize,
           readTimeout,
           writeTimeout));
@@ -1120,7 +1114,7 @@ inline SQAWorkerMultiService::SQAWorkerMultiService(
 )
 {
   _connection = (uintptr_t)(new StateQueueClient(
-          ServiceTypeWorker,
+          SQAUtil::ServiceWorkerMulti,
           applicationId,
           serviceAddressAll,
           servicePortAll,

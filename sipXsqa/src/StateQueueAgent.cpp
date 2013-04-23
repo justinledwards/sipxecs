@@ -490,7 +490,7 @@ void StateQueueAgent::handlePublish(StateQueueConnection& conn, StateQueueMessag
       return;
     }
 
-    if (false == validateId(id, ServiceTypePublisher))
+    if (false == SQAUtil::validateId(id, SQAUtil::ServicePublisher))
     {
         sendErrorResponse(message.getType(), conn, id, "Message-id is invalid for an external message.");
         return;
@@ -1153,7 +1153,7 @@ void StateQueueAgent::handleSignin(StateQueueConnection& conn, StateQueueMessage
       conn.markExternalConnection();
   }
 
-  if (serviceTypeStr[ServiceTypeWorker] == serviceType)
+  if (SQAUtil::getServiceTypeStr(SQAUtil::ServiceWorker) == serviceType)
     _publisher.addSubscriber(subscriptionEvent, appId, subscriptionExpires);
 
   OS_LOG_NOTICE(FAC_NET, "StateQueueAgent::handleSignin "
@@ -1198,7 +1198,7 @@ void StateQueueAgent::handleLogout(StateQueueConnection& conn, StateQueueMessage
     return;
   }
 
-  if (serviceTypeStr[ServiceTypeWorker] == serviceType)
+  if (SQAUtil::getServiceTypeStr(SQAUtil::ServiceWorker) == serviceType)
     _publisher.removeSubscriber(subscriptionEvent, appId);
 
   OS_LOG_NOTICE(FAC_NET, "StateQueueAgent::handleLogout "
@@ -1228,7 +1228,7 @@ void StateQueueAgent::fillConnectionEventRecord(
         ConnectionEvent connnectionEvent
         )
 {
-    generateRecordId(record.id, connnectionEvent);
+    SQAUtil::generateRecordId(record.id, connnectionEvent);
 
     record.data = conn.getApplicationId();
     record.data += "|";

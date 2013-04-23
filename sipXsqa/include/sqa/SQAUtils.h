@@ -26,20 +26,75 @@
 
 #include "sqa/SQADefines.h"
 
-extern const char* serviceTypeStr[];
 extern const char* connectionEventStr[];
 
-const char* getServiceTypeStr(ServiceType serviceType);
-const char* getConnectionEventStr(ConnectionEvent connectionEvent);
+class SQAUtil
+{
+public:
+  static const int ServiceUnknown;
+  static const int ServicePublisher;
+  static const int ServiceDealer;
+  static const int ServiceWatcher;
+  static const int ServiceWorker;
+  static const int ServiceWorkerMulti;
 
-void generateRecordId(std::string &recordId, ConnectionEvent event);
+  static const int ServiceRolePublisher = 0x1;
+  static const int ServiceRoleWatcher = 0x10;
 
-bool generateZmqEventId(std::string &zmqEventId, ServiceType serviceType, std::string &eventId);
+  static const int ServiceSpecDealer = 0x1000;
+  static const int ServiceSpecWorker = 0x10000;
+  static const int ServiceSpecMulti  = 0x100000;
+  static const int ServiceSpecExternal= 0x1000000;
 
-bool generateId(std::string &id, ServiceType serviceType, const std::string &eventId);
+  static bool isExternal(int serviceType)
+  {
+    return (serviceType & ServiceSpecExternal);
+  }
 
-bool validateId(const std::string &id, ServiceType serviceType);
-bool validateId(const std::string &id, ServiceType serviceType, const std::string &eventId);
-bool validateIdHexComponent(const std::string &hex);
+  static bool isPublisher(int serviceType)
+  {
+    return (serviceType & ServiceRolePublisher);
+  }
+
+  static bool isPublisherOnly(int serviceType)
+  {
+    return (serviceType == ServiceRolePublisher);
+  }
+
+  static bool isDealer(int serviceType)
+  {
+    return (serviceType & ServiceRolePublisher && serviceType & ServiceSpecDealer);
+  }
+
+  static bool isWatcher(int serviceType)
+  {
+    return (serviceType & ServiceRoleWatcher);
+  }
+
+  static bool isWatcherOnly(int serviceType)
+  {
+    return (serviceType == ServiceRoleWatcher);
+  }
+
+  static bool isWorker(int serviceType)
+  {
+    return (serviceType & ServiceRoleWatcher && serviceType & ServiceSpecWorker);
+  }
+
+  static const char* getServiceTypeStr(int serviceType);
+  static const char* getConnectionEventStr(ConnectionEvent connectionEvent);
+
+  static void generateRecordId(std::string &recordId, ConnectionEvent event);
+
+  static bool generateZmqEventId(std::string &zmqEventId, int serviceType, std::string &eventId);
+
+  static bool generateId(std::string &id, int serviceType, const std::string &eventId);
+
+  static bool validateId(const std::string &id, int serviceType);
+  static bool validateId(const std::string &id, int serviceType, const std::string &eventId);
+  static bool validateIdHexComponent(const std::string &hex);
+
+};
+
 
 #endif //SQAUTILS_H_INCLUDED

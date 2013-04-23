@@ -1,13 +1,11 @@
 #include "sqa/SQAUtils.h"
 
-const char* serviceTypeStr[] =
-{
-    "unknown",
-    "publisher",
-    "dealer",
-    "worker",
-    "watcher",
-};
+const int SQAUtil::ServiceUnknown = 0;
+const int SQAUtil::ServicePublisher = ServiceRolePublisher;
+const int SQAUtil::ServiceDealer =  ServiceRolePublisher | ServiceSpecDealer;
+const int SQAUtil::ServiceWatcher =  ServiceRoleWatcher;
+const int SQAUtil::ServiceWorker =  ServiceRoleWatcher | ServiceSpecWorker;
+const int SQAUtil::ServiceWorkerMulti =  ServiceRoleWatcher | ServiceSpecWorker | ServiceSpecMulti;
 
 const char * connectionEventStr[] =
 {
@@ -19,17 +17,29 @@ const char * connectionEventStr[] =
     "terminate",
 };
 
-const char* getServiceTypeStr(ServiceType serviceType)
+const char* SQAUtil::getServiceTypeStr(int serviceType)
 {
-    if (serviceType >= ServiceTypeNum)
-    {
-        serviceType = ServiceTypeUnknown;
-    }
+  if (isDealer(serviceType))
+  {
+    return "dealer";
+  }
+  else if (isPublisherOnly(serviceType))
+  {
+    return "publisher";
+  }
+  if (isWorker(serviceType))
+  {
+    return "worker";
+  }
+  if (isWatcherOnly(serviceType))
+  {
+    return "watcher";
+  }
 
-    return serviceTypeStr[serviceType];
+  return "unknown";
 }
 
-const char* getConnectionEventStr(ConnectionEvent connectionEvent)
+const char* SQAUtil::getConnectionEventStr(ConnectionEvent connectionEvent)
 {
     if (connectionEvent >= ConnectionEventNum)
     {
@@ -40,55 +50,50 @@ const char* getConnectionEventStr(ConnectionEvent connectionEvent)
 }
 
 
-void generateRecordId(std::string &recordId, ConnectionEvent connectionEvent)
+void SQAUtil::generateRecordId(std::string &recordId, ConnectionEvent connectionEvent)
 {
     recordId = PublisherWatcherPrefix;
     recordId += ".connection.";
     recordId += getConnectionEventStr(connectionEvent);
 }
 
-bool generateZmqEventId(std::string &zmqEventId, ServiceType serviceType, std::string &eventId)
+bool SQAUtil::generateZmqEventId(std::string &zmqEventId, int serviceType, std::string &eventId)
 {
-    bool ret = true;
+    bool ret = false;
 
-    switch (serviceType)
+    if (isWatcherOnly(serviceType))
     {
-    case ServiceTypeWatcher:
         zmqEventId = PublisherWatcherPrefix;
         zmqEventId += "." + eventId;
-        break;
-    case ServiceTypeWorker:
+        ret = true;
+    }
+    else if (isWorker(serviceType))
+    {
         zmqEventId = DealerWorkerPrefix;
         zmqEventId += "." + eventId;
-        break;
-    default:
-        ret = false;
-        break;
+        ret = true;
     }
 
     return ret;
 }
 
-bool generateId(std::string &id, ServiceType serviceType, const std::string &eventId)
+bool SQAUtil::generateId(std::string &id, int serviceType, const std::string &eventId)
 {
     bool ret = true;
     std::ostringstream ss;
 
-    switch(serviceType)
+    if (isDealer(serviceType) || isWorker(serviceType))
     {
-    case ServiceTypePublisher:
-    case ServiceTypeWatcher:
-        ss << PublisherWatcherPrefix;
-        break;
-    case ServiceTypeDealer:
-    case ServiceTypeWorker:
-        ss << DealerWorkerPrefix;
-        break;
-    case ServiceTypeUnknown:
-    default:
-        ss << UnknownPrefix;
-        ret = false;
-        break;
+      ss << DealerWorkerPrefix;
+    }
+    else if (isPublisherOnly(serviceType) || isWatcherOnly(serviceType))
+    {
+      ss << PublisherWatcherPrefix;
+    }
+    else
+    {
+      ss << UnknownPrefix;
+      ret = false;
     }
 
     if (!eventId.empty())
@@ -106,7 +111,7 @@ bool generateId(std::string &id, ServiceType serviceType, const std::string &eve
 }
 
 
-bool validateId(const std::string &id, ServiceType serviceType, const std::string &eventId)
+bool SQAUtil::validateId(const std::string &id, int serviceType, const std::string &eventId)
 {
     std::vector<std::string> parts;
     boost::algorithm::split(parts, id, boost::is_any_of("."), boost::token_compress_on);
@@ -114,14 +119,23 @@ bool validateId(const std::string &id, ServiceType serviceType, const std::strin
     if (3 != parts.size())
         return false;
 
-    if ((ServiceTypeWatcher == serviceType || ServiceTypePublisher == serviceType) && parts[0] != PublisherWatcherPrefix)
+    if (parts[0] == DealerWorkerPrefix)
     {
+      if (!isDealer(serviceType) && !isWorker(serviceType))
+      {
         return false;
+      }
     }
-
-    if ((ServiceTypeWorker == serviceType || ServiceTypeDealer == serviceType) && parts[0] != DealerWorkerPrefix)
+    else if (parts[0] == PublisherWatcherPrefix)
     {
+      if (!isPublisherOnly(serviceType) && !isWatcherOnly(serviceType))
+      {
         return false;
+      }
+    }
+    else
+    {
+      return false;
     }
 
     if (eventId != parts[1])
@@ -140,7 +154,7 @@ bool validateId(const std::string &id, ServiceType serviceType, const std::strin
     return (validateIdHexComponent(parts[0]) && validateIdHexComponent(parts[1]));
 }
 
-bool validateId(const std::string &id, ServiceType serviceType)
+bool SQAUtil::validateId(const std::string &id, int serviceType)
 {
     std::vector<std::string> parts;
     boost::algorithm::split(parts, id, boost::is_any_of("."), boost::token_compress_on);
@@ -148,20 +162,29 @@ bool validateId(const std::string &id, ServiceType serviceType)
     if (2 > parts.size())
         return false;
 
-    if ((ServiceTypeWatcher == serviceType || ServiceTypePublisher == serviceType) && parts[0] != PublisherWatcherPrefix)
+    if (parts[0] == DealerWorkerPrefix)
     {
+      if (!isDealer(serviceType) && !isWorker(serviceType))
+      {
         return false;
+      }
     }
-
-    if ((ServiceTypeWorker == serviceType || ServiceTypeDealer == serviceType) && parts[0] != DealerWorkerPrefix)
+    else if (parts[0] == PublisherWatcherPrefix)
     {
+      if (!isPublisherOnly(serviceType) && !isWatcherOnly(serviceType))
+      {
         return false;
+      }
+    }
+    else
+    {
+      return false;
     }
 
     return true;
 }
 
-bool validateIdHexComponent(const std::string &hex)
+bool SQAUtil::validateIdHexComponent(const std::string &hex)
 {
     if (hex.size() != 4)
         return false;

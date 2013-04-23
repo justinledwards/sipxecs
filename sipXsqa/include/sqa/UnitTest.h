@@ -107,10 +107,9 @@ std::string ___var2_(var2); \
 if (___var1_ != ___var2_) \
 { \
   std::ostringstream ___strm_; \
-  ___strm_ << "Expecting \"" << var1 << "\" for " << #var1 << " but we got \"" << var2 << "\""; \
+  ___strm_ << "Expecting  " << __LINE__ << "\"" << var1 << "\" for " << #var1 << " but we got \"" << var2 << "\""; \
   ___error_ = ___strm_.str(); \
   ___hasError_ = true; \
-  return; \
 } \
 }
 
@@ -149,10 +148,9 @@ if (___var1_ != ___var2_) \
 if (!(eval)) \
 { \
   std::ostringstream ___strm_; \
-  ___strm_ << "Expecting condition to be TRUE but we got FALSE - " << #eval; \
+  ___strm_ << "Expecting " << __LINE__ << " condition to be TRUE but we got FALSE - " << #eval; \
   ___error_ = ___strm_.str(); \
   ___hasError_ = true; \
-  return; \
 } \
 }
 
@@ -161,11 +159,22 @@ if (!(eval)) \
 if (var1 != var2) \
 { \
   std::ostringstream ___strm_; \
-  ___strm_ << "Expecting " << #var1 << " and " << #var2 \
+  ___strm_ << "Expecting  " << __LINE__ << #var1 << " and " << #var2 \
   << " to be EQUAL but values are `" << var1 << "` and `" << var2 << "` respectively"; \
   ___error_ = ___strm_.str(); \
   ___hasError_ = true; \
-  return; \
+} \
+}
+
+#define ASSERT_STR_STARTS_WITH(var1, var2) \
+{ \
+if (!boost::starts_with(var1,var2)) \
+{ \
+  std::ostringstream ___strm_; \
+  ___strm_ << "Expecting  " << __LINE__ << #var1 << " and " << #var2 \
+  << " to be EQUAL but values are `" << var1 << "` and `" << var2 << "` respectively"; \
+  ___error_ = ___strm_.str(); \
+  ___hasError_ = true; \
 } \
 }
 

@@ -53,7 +53,7 @@ int main(int argc, char** argv)
     StateQueueDriverTest test(sqa, argc, argv);
     if (!test.runTests())
       return -1;
-    sqa.stop();
+     sqa.stop();
     return 0;
   }
   OS_LOG_INFO(FAC_NET, "State Queue Agent process STARTED.");
