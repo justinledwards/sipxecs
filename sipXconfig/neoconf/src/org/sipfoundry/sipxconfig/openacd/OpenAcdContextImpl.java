@@ -257,7 +257,7 @@ public class OpenAcdContextImpl extends SipxHibernateDaoSupport implements OpenA
      * afford to fail.  This method picks an invalid extension, but at least one that
      * will allow setup to proceed.  Admin can fix later.
      */
-    void saveExtentionWithWorkaroundIfInUse(OpenAcdExtension extension, FreeswitchCondition condition) {
+    protected void saveExtentionWithWorkaroundIfInUse(OpenAcdExtension extension, FreeswitchCondition condition) {
         int typesOfExceptions = 3;
         for (int i = 0; i < typesOfExceptions; i++) {
             try {
