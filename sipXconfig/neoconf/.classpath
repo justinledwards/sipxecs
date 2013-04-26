@@ -11,6 +11,5 @@
 	<classpathentry kind="var" path="SIPX_JAVADIR/sipXecs/sipXconfig/agent-bindings.jar"/>
 	<classpathentry kind="var" path="SIPX_JAVADIR/sipXecs/sipXconfig/cdr-bindings.jar"/>
 	<classpathentry kind="var" path="SIPX_JAVADIR"/>
-	<classpathentry kind="var" path="SIPX_SRCDIR/sipXcommons/lib/joda-time-2.1.jar"/>
 	<classpathentry kind="output" path="bin.eclipse"/>
 </classpath>

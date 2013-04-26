@@ -32,13 +32,11 @@ public class DefaultMessagePacketInterceptor extends AbstractMessagePacketInterc
     private final static String CONF_DIRECTIVE = "@conf";
     private final static String TRANSFER_DIRECTIVE = "@xfer";
 
-    @Override
-	public void start(SipXOpenfirePlugin plugin) {
+    public void start(SipXOpenfirePlugin plugin) {
         this.plugin = plugin;
     }
 
-    @Override
-	public void interceptPacket(Packet packet, Session session, boolean incoming,
+    public void interceptPacket(Packet packet, Session session, boolean incoming,
             boolean processed) throws PacketRejectedException {
         try {
             if (packet instanceof Message) {
@@ -90,7 +88,7 @@ public class DefaultMessagePacketInterceptor extends AbstractMessagePacketInterc
     /*
      * TODO : Convert this to use the REST client. Does not seem to work.
      */
-    private static void sendRestRequest(String url) {
+    void sendRestRequest(String url) {
 
         try {
             String command = "curl -k -X POST " + url;
@@ -234,9 +232,9 @@ public class DefaultMessagePacketInterceptor extends AbstractMessagePacketInterc
                                 conferenceName = plugin.getConferenceName(subdomain, roomName);
                                 // verify that the command issuer has the privilege to start the conference and
                                 // has a SIP ID.
-                                JID commandRequester = message.getFrom();
-                                Collection<JID> owners = chatRoom.getOwners();
-                                String commandRequesterSipId = plugin.getSipId(commandRequester.toBareJID());
+                                String commandRequester = message.getFrom().toBareJID();
+                                Collection<String> owners = chatRoom.getOwners();
+                                String commandRequesterSipId = plugin.getSipId(commandRequester);
                                 if (commandRequesterSipId != null && owners.contains(commandRequester)) {
                                     String conferencePin = plugin.getConferencePin(subdomain, roomName);
                                     // Check who is to be invited to the conference.  If the @conf directive
@@ -401,7 +399,7 @@ public class DefaultMessagePacketInterceptor extends AbstractMessagePacketInterc
 
     // turns a message into a reply.  Note that this operation destroys the original message (i.e. the original
     // message will never be delivered to the original destination).
-    private static void reply( Message message, String replyText ){
+    private void reply( Message message, String replyText ){
         JID from = message.getFrom();
         JID to   = message.getTo();
         message.setTo(from);
@@ -409,7 +407,7 @@ public class DefaultMessagePacketInterceptor extends AbstractMessagePacketInterc
         changeMessageBody(message, replyText);
     }
 
-    private static void changeMessageBody( Message message, String newBodyText ){
+    private void changeMessageBody( Message message, String newBodyText ){
         // the message can carry the chat text in two places:
         // #1 -[mandatory]- the message's body element carries the vanilla version of the chat text
         // #2 -[optional]- the message's html extension carries a style-enhanced version of the chat text
@@ -421,5 +419,15 @@ public class DefaultMessagePacketInterceptor extends AbstractMessagePacketInterc
         message.setBody(newBodyText);
         // address #2
         message.deleteExtension( "html", "http://jabber.org/protocol/xhtml-im");
+    }
+
+    private void appendToMessageBody( Message message, String textToAppend ){
+        String currentBody = message.getBody();
+        if( currentBody == null ){
+            message.setBody(textToAppend);
+        }
+        else{
+            message.setBody(currentBody + textToAppend);
+        }
     }
 }

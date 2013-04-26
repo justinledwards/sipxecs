@@ -39,7 +39,6 @@ import org.sipfoundry.sipxconfig.firewall.DefaultFirewallRule;
 import org.sipfoundry.sipxconfig.firewall.FirewallManager;
 import org.sipfoundry.sipxconfig.firewall.FirewallProvider;
 import org.sipfoundry.sipxconfig.im.ImManager;
-import org.sipfoundry.sipxconfig.networkqueue.NetworkQueueManager;
 import org.sipfoundry.sipxconfig.proxy.ProxyManager;
 import org.sipfoundry.sipxconfig.setting.BeanWithSettingsDao;
 import org.sipfoundry.sipxconfig.snmp.ProcessDefinition;
@@ -125,8 +124,6 @@ public class RlsImpl implements AddressProvider, FeatureProvider, Rls, ProcessPr
     @Override
     public void featureChangePrecommit(FeatureManager manager, FeatureChangeValidator validator) {
         validator.requiresAtLeastOne(FEATURE, ProxyManager.FEATURE);
-        validator.requiresAtLeastOne(FEATURE, NetworkQueueManager.FEATURE);
-        validator.singleLocationOnly(FEATURE);
     }
 
     @Override

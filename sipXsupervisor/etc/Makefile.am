@@ -3,7 +3,6 @@ include $(top_srcdir)/config/utility.am
 EXTRA_DIST = \
 	$(cfinputs_PROMISES:=.in) \
 	$(cflib_DATA:=.in) \
-	security.erb \
 	security.sec.erb.in \
 	cfengine_stdlib.cf
 
@@ -34,7 +33,6 @@ cfinputs_DATA = \
 
 cfpluginsdir = $(SIPX_CFINPUTS)/plugin.d
 dist_cfplugins_DATA = \
-	00_ssh.cf \
 	sipxsupervisor.cf \
 	selinux.cf \
 	firewall.cf \
@@ -53,10 +51,13 @@ fwconfdir = $(SIPX_CONFDIR)/firewall
 dist_fwconf_DATA = \
 	iptables.erb
 
-securitydir = $(SIPX_CONFDIR)/fail2ban
 security_DATA = \
+    security.sec.erb
+
+securitydir = $(SIPX_CONFDIR)/fail2ban
+dist_security_DATA = \
 	security.erb \
-        security.sec.erb
+	$(security_DATA)
 
 dhcpdir = $(SIPX_CONFDIR)/dhcp
 dist_dhcp_DATA = \
@@ -88,7 +89,10 @@ $(emptydirs) :
 
 install-data-hook : $(emptydirs)
 
-$(cflib_DATA) $(cfinputs_PROMISES) security.sec.erb : % : %.in Makefile
+$(cflib_DATA) $(cfinputs_PROMISES) : % : %.in Makefile
 	@$(call SearchAndReplace, $<, $@)
 
-CLEANFILES = $(cfinputs_PROMISES) $(cfdefaults_DATA) $(cflib_DATA) security.sec.erb
+$(cflib_DATA) $(security_DATA) : % : %.in Makefile
+	@$(call SearchAndReplace, $<, $@)
+
+CLEANFILES = $(cfinputs_PROMISES) $(cfdefaults_DATA) $(cflib_DATA)

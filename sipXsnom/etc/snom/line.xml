@@ -63,7 +63,6 @@
       <value />
     </setting>
     <setting name="user_ringer">
-      <profileName>user_ringer$</profileName>
       <type refid="ringer" />
       <value>Ringer1</value>
     </setting>

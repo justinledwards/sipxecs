@@ -124,8 +124,7 @@ public class SpeedDialManagerImpl extends SipxHibernateDaoSupport implements Spe
     public void saveSpeedDial(SpeedDial speedDial) {
         getHibernateTemplate().saveOrUpdate(speedDial);
         getHibernateTemplate().flush();
-        User user = m_coreContext.loadUser(speedDial.getUser().getId());
-        getDaoEventPublisher().publishSave(user);
+        getDaoEventPublisher().publishSave(speedDial.getUser());
     }
 
     /**

@@ -31,19 +31,6 @@
       </option>
     </enum>
   </type>
-  <type id="poly">
-    <enum>
-      <option>
-        <value>3.2.X</value>
-      </option>
-      <option>
-        <value>4.0.X</value>
-      </option>
-      <option>
-        <value>4.1.X</value>
-      </option>
-    </enum>
-  </type>
   <group name="provision-config">
     <setting name="log.level">
       <type refid="loglevel" />
@@ -82,10 +69,6 @@
     </setting>
     <setting name="provision.configUrl" hidden="yes">
       <type><string/></type>
-    </setting>
-    <setting name="polycom.default">
-      <type refid="poly" />
-      <value>4.0.X</value>
-    </setting>
+    </setting>    
   </group>
 </model>

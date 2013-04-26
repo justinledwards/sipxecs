@@ -282,11 +282,3 @@
     </option>
   </enum>
 </type>
-<type id="fwver">
-          <enum>
-            <option><value></value></option>
-            <option><value>7.3.X</value></option>
-            <option><value>8.4.X</value></option>
-            <option><value>8.7.X</value></option>
-          </enum>
-</type>

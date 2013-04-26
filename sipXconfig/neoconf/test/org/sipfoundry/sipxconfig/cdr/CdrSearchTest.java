@@ -36,11 +36,6 @@ public class CdrSearchTest extends TestCase {
         StringBuilder sql = new StringBuilder();
         assertTrue(sql.toString(), search.appendGetSql(sql));
         assertEquals(" AND (caller_aor LIKE '%<sip:abc@%>' AND caller_internal=true)", sql.toString());
-
-        search.setAdmin(true);
-        sql = new StringBuilder();
-        assertTrue(sql.toString(), search.appendGetSql(sql));
-        assertEquals(" AND (caller_aor LIKE '%<sip:abc@%>')", sql.toString());
     }
 
     public void testGetSqlCallerWithAliases() {
@@ -53,13 +48,6 @@ public class CdrSearchTest extends TestCase {
         assertTrue(sql.toString(), search.appendGetSql(sql));
         assertEquals(
                 " AND (caller_aor LIKE '%<sip:abc@%>' OR caller_aor LIKE '%<sip:def@%>' AND caller_internal=true)",
-                sql.toString());
-
-        search.setAdmin(true);
-        sql = new StringBuilder();
-        assertTrue(sql.toString(), search.appendGetSql(sql));
-        assertEquals(
-                " AND (caller_aor LIKE '%<sip:abc@%>' OR caller_aor LIKE '%<sip:def@%>')",
                 sql.toString());
     }
 
@@ -74,12 +62,6 @@ public class CdrSearchTest extends TestCase {
         assertEquals(
                 " AND (callee_aor LIKE '%<sip:abc@%>' AND (callee_route LIKE '%INT' OR callee_route LIKE '%AA' OR callee_route LIKE '%VM' OR callee_route LIKE '%PAGE' OR callee_route LIKE '%PARK' OR callee_route LIKE '%DPUP' OR callee_route IS NULL))",
                 sql.toString());
-
-        search.setAdmin(true);
-        sql = new StringBuilder();
-        assertTrue(sql.toString(), search.appendGetSql(sql));
-        assertEquals(
-                " AND (callee_aor LIKE '%<sip:abc@%>')", sql.toString());
     }
 
     public void testGetSqlCalleeWithAliases() {
@@ -92,13 +74,6 @@ public class CdrSearchTest extends TestCase {
         assertTrue(sql.toString(), search.appendGetSql(sql));
         assertEquals(
                 " AND (callee_aor LIKE '%<sip:abc@%>' OR callee_aor LIKE '%<sip:def@%>' AND (callee_route LIKE '%INT' OR callee_route LIKE '%AA' OR callee_route LIKE '%VM' OR callee_route LIKE '%PAGE' OR callee_route LIKE '%PARK' OR callee_route LIKE '%DPUP' OR callee_route IS NULL))",
-                sql.toString());
-
-        search.setAdmin(true);
-        sql = new StringBuilder();
-        assertTrue(sql.toString(), search.appendGetSql(sql));
-        assertEquals(
-                " AND (callee_aor LIKE '%<sip:abc@%>' OR callee_aor LIKE '%<sip:def@%>')",
                 sql.toString());
     }
 
@@ -113,13 +88,6 @@ public class CdrSearchTest extends TestCase {
         assertEquals(
                 " AND ((caller_aor LIKE '%<sip:abc@%>' AND caller_internal=true) OR (callee_aor LIKE '%<sip:abc@%>' AND (callee_route LIKE '%INT' OR callee_route LIKE '%AA' OR callee_route LIKE '%VM' OR callee_route LIKE '%PAGE' OR callee_route LIKE '%PARK' OR callee_route LIKE '%DPUP' OR callee_route IS NULL)))",
                 sql.toString());
-
-        search.setAdmin(true);
-        sql = new StringBuilder();
-        assertTrue(sql.toString(), search.appendGetSql(sql));
-        assertEquals(
-                " AND ((caller_aor LIKE '%<sip:abc@%>') OR (callee_aor LIKE '%<sip:abc@%>'))",
-                sql.toString());
     }
 
     public void testGetSqlAnyWithAliases() {
@@ -132,13 +100,6 @@ public class CdrSearchTest extends TestCase {
         assertTrue(sql.toString(), search.appendGetSql(sql));
         assertEquals(
                 " AND ((caller_aor LIKE '%<sip:abc@%>' OR caller_aor LIKE '%<sip:def@%>' AND caller_internal=true) OR (callee_aor LIKE '%<sip:abc@%>' OR callee_aor LIKE '%<sip:def@%>' AND (callee_route LIKE '%INT' OR callee_route LIKE '%AA' OR callee_route LIKE '%VM' OR callee_route LIKE '%PAGE' OR callee_route LIKE '%PARK' OR callee_route LIKE '%DPUP' OR callee_route IS NULL)))",
-                sql.toString());
-
-        search.setAdmin(true);
-        sql = new StringBuilder();
-        assertTrue(sql.toString(), search.appendGetSql(sql));
-        assertEquals(
-                " AND ((caller_aor LIKE '%<sip:abc@%>' OR caller_aor LIKE '%<sip:def@%>') OR (callee_aor LIKE '%<sip:abc@%>' OR callee_aor LIKE '%<sip:def@%>'))",
                 sql.toString());
     }
 

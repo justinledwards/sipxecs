@@ -1,26 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <beans xmlns="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-2.0.xsd">
-  <bean id="snomModel" abstract="true" parent="abstractPhoneModel" class="org.sipfoundry.sipxconfig.phone.snom.SnomModel">
+  <bean id="snomModel" abstract="true" parent="abstractPhoneModel">
     <property name="beanId" value="snom" />
     <property name="defaultProfileLocation" ref="httpProfileLocation" />
     <property name="profileTemplate" value="snom/snom.vm" />
     <property name="vendor" value="SNOM" />
     <property name="restartSupported" value="true" />
-    <property name="versions">
-      <list>
-        <ref local="org.sipfoundry.sipxconfig.phone.snom.SnomModel.VER_7_3_X"/>
-        <ref local="org.sipfoundry.sipxconfig.phone.snom.SnomModel.VER_8_4_X"/>
-        <ref local="org.sipfoundry.sipxconfig.phone.snom.SnomModel.VER_8_7_X"/>
-      </list>
-    </property>
   </bean>
-  <bean id="org.sipfoundry.sipxconfig.phone.snom.SnomModel.VER_7_3_X"
-        class="org.springframework.beans.factory.config.FieldRetrievingFactoryBean" />
-  <bean id="org.sipfoundry.sipxconfig.phone.snom.SnomModel.VER_8_4_X"
-        class="org.springframework.beans.factory.config.FieldRetrievingFactoryBean" />
-  <bean id="org.sipfoundry.sipxconfig.phone.snom.SnomModel.VER_8_7_X"
-        class="org.springframework.beans.factory.config.FieldRetrievingFactoryBean" />
 
   <bean id="snom300" parent="snomModel">
     <property name="label" value="Snom 300" />
@@ -62,7 +49,6 @@
   </bean>
   <bean id="snom" class="org.sipfoundry.sipxconfig.phone.snom.SnomPhone" scope="prototype" parent="abstractPhone">
     <property name="speedDialManager" ref="speedDialManager" />
-    <property name="uploadManager" ref="uploadManager" />
   </bean>
 
    <bean id="snomM3Model" abstract="true" parent="abstractPhoneModel">
@@ -83,19 +69,6 @@
   </bean>
 
   <bean id="snomM3Phone" class="org.sipfoundry.sipxconfig.phone.snom.SnomM3Phone" scope="prototype" parent="abstractPhone">
-  </bean>
-
-  <bean id="snomLanguage" class="org.sipfoundry.sipxconfig.upload.UploadSpecification">
-    <property name="beanId" value="snomUpload" />
-    <property name="modelFilePath" value="snom/upload.xml" />
-    <property name="label" value="Language File For Snom Phone" />
-  </bean>
-
-  <bean id="snomUpload" class="org.sipfoundry.sipxconfig.phone.snom.SnomUpload"
-    scope="prototype" parent="upload">
-    <property name="destinationDirectory">
-      <value>${sysdir.phone}/profile/docroot/</value>
-    </property>
   </bean>
 
 </beans>

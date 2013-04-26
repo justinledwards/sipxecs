@@ -36,12 +36,14 @@ public class UserLocationTestIntegration extends ImdbTestCase {
     public void testGenerate() throws Exception {
         m_users = new ArrayList<User>();
         for (String[] ud : USER_DATA) {
-            User user = getCoreContext().newUser();
+            User user = new User();
+            user.setPermissionManager(getPermissionManager());
 
             user.setUniqueId(new Integer(ud[0]));
             user.setFirstName(ud[1]);
             user.setLastName(ud[2]);
             user.setUserName(ud[3]);
+            user.setDomainManager(getDomainManager());
             if (ud[4] != null) {
                 Branch branch = new Branch();
                 branch.setUniqueId();

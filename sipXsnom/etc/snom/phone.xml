@@ -1387,10 +1387,6 @@
       <type refid="ringer" />
       <value>Ringer1</value>
     </setting>
-    <setting name="alert_external_ring_sound">
-      <type refid="ringer" />
-      <value>Ringer1</value>
-    </setting>
     <setting name="custom_melody_url">
       <type>
         <string />

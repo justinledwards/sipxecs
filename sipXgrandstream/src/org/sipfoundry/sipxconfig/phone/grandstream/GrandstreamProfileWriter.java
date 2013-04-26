@@ -86,24 +86,11 @@ public class GrandstreamProfileWriter extends AbstractSettingVisitor {
 
     void writeLine(String name, String value) {
         String lname = name;
-        String lvalue = value;
         if (isCompositeProfileName(lname)) {
             String[] names = name.split("-");
             lname = names[m_lineIndex];
         }
-        if (lname.startsWith("CustomP")) {
-            if (lvalue != null) {
-                String[] customp = lvalue.split("=", 2);
-                lname = customp[0];
-                lvalue = customp[1];
-            } else {
-                lname = "";
-                lvalue = null;
-            }
-        }
-        if (!lname.isEmpty()) {
-            writeLineEntry(lname, lvalue);
-        }
+        writeLineEntry(lname, value);
     }
 
     protected void writeLineEntry(String name, String value) {

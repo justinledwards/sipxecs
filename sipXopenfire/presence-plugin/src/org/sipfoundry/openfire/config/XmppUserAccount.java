@@ -171,6 +171,8 @@ public class XmppUserAccount extends XmppConfigurationElement {
         .append(this.getAdvertiseOnCallPreference())
         .append("'\n    onthephoneMessage='")
         .append(this.getOnThePhoneMessage())
+        .append("'\n    password='")
+        .append(this.getPassword())
         .append("'\n    onCallDetailsPref='")
         .append(this.getShowOnCallDetailsPreference())
         .append("'\n    SIP user name='")

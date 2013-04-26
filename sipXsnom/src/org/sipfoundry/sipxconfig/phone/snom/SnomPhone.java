@@ -13,7 +13,6 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 
-import org.sipfoundry.sipxconfig.upload.UploadManager;
 import org.sipfoundry.sipxconfig.device.ProfileContext;
 import org.sipfoundry.sipxconfig.phone.Line;
 import org.sipfoundry.sipxconfig.phone.LineInfo;
@@ -28,7 +27,6 @@ public class SnomPhone extends Phone {
     public static final String BEAN_ID = "snom";
 
     private SpeedDialManager m_speedDialManager;
-    private UploadManager m_uploadManager;
 
     public SnomPhone() {
     }
@@ -36,10 +34,6 @@ public class SnomPhone extends Phone {
     @Required
     public void setSpeedDialManager(SpeedDialManager speedDialManager) {
         m_speedDialManager = speedDialManager;
-    }
-
-    public void setUploadManager(UploadManager uploadManager) {
-        m_uploadManager = uploadManager;
     }
 
     @Override
@@ -63,20 +57,7 @@ public class SnomPhone extends Phone {
     protected ProfileContext<SnomPhone> createContext() {
         SpeedDial speedDial = getPhoneContext().getSpeedDial(this);
         Collection<PhonebookEntry> phoneBook = getPhoneContext().getPhonebookEntries(this);
-        if (getDeviceVersion() == SnomModel.VER_7_3_X) {
-            return new SnomProfileContext(this, speedDial, phoneBook, "snom/snom-7_3_X.vm",
-                                          m_uploadManager);
-        }
-        if (getDeviceVersion() == SnomModel.VER_8_4_X) {
-            return new SnomProfileContext(this, speedDial, phoneBook, "snom/snom-8_4_X.vm",
-                                          m_uploadManager);
-        }
-        if (getDeviceVersion() == SnomModel.VER_8_7_X) {
-            return new SnomProfileContext(this, speedDial, phoneBook, "snom/snom-8_7_X.vm",
-                                          m_uploadManager);
-        }
-        return new SnomProfileContext(this, speedDial, phoneBook, getModel().getProfileTemplate(),
-                                      m_uploadManager);
+        return new SnomProfileContext(this, speedDial, phoneBook, getModel().getProfileTemplate());
     }
 
     @Override

@@ -12,13 +12,8 @@
     <property name="target" ref="mongoManagerImpl"/>
     <property name="proxyInterfaces" value="org.sipfoundry.sipxconfig.mongo.MongoManager"/>
   </bean>
-  
+
   <bean id="mongoManagerImpl" class="org.sipfoundry.sipxconfig.mongo.MongoManagerImpl">
-    <property name="mongoStatusScript" value="${sysdir.bin}/mongodb-status"/>
-    <property name="mongoAnalyzerScript" value="${sysdir.bin}/mongodb-analyzer"/>
-    <property name="mongoAdminScript" value="mongodb-admin"/>
-    <property name="configManager" ref="configManager"/>
-    <property name="featureManager" ref="featureManager"/>
     <property name="settingsDao">
       <bean parent="beanWithSettingsDao">
         <property name="target">
@@ -32,15 +27,40 @@
   
   <bean id="mongoConfig" class="org.sipfoundry.sipxconfig.mongo.MongoConfig">
     <property name="mongoManager" ref="mongoManager"/>
+    <property name="mongoReplicaSetManager" ref="mongoReplicaSetManager"/>
   </bean>
 
   <bean id="mongoSettings" class="org.sipfoundry.sipxconfig.mongo.MongoSettings" parent="settingsBean">
+  </bean>
+
+  <!-- Use separate mongo factor to protect against disconnetion when -->
+  <bean id="mongoLocalDbFactory" class="org.sipfoundry.commons.mongo.MongoSpringFactory">
+    <property name="connectionUrl" value="mongodb://localhost:27017"/>
+  </bean>  
+
+  <bean id="localDb" class="org.sipfoundry.commons.mongo.MongoSpringTemplate">
+    <constructor-arg ref="mongoLocalDbFactory"/>
+    <!--  NOTE: same db used in unit tests to keep that in mind -->
+    <property name="dbname" value="local"/> 
+  </bean>
+
+  <bean id="localReplicaSetDb" class="org.sipfoundry.commons.mongo.MongoSpringTemplate">
+    <constructor-arg ref="mongoDbFactory"/>
+    <!--  NOTE: same db used in unit tests to keep that in mind -->
+    <property name="dbname" value="local"/> 
+  </bean>
+  
+  <bean id="mongoReplicaSetManager" class="org.sipfoundry.sipxconfig.mongo.MongoReplicaSetManager" init-method="checkState">
+    <property name="localDb" ref="localDb"/>
+    <property name="localReplicaSetDb" ref="localReplicaSetDb"/>
+    <property name="replicationManager" ref="replicationManager"/>
+    <property name="configManager" ref="configManager" />
   </bean>
 
   <bean id="mongoAlarms" class="org.springframework.context.support.ResourceBundleMessageSource">
     <property name="basename">
       <value>org.sipfoundry.sipxconfig.mongo.mongo</value>
     </property>
-  </bean>  
+  </bean>
   
 </beans>

@@ -30,9 +30,6 @@
         <option>
             <label>G.722</label><value>9</value>
         </option>
-        <option>
-            <label>None</label><value></value>
-        </option>
     </enum>
 </type>
 <type id="gs-fxs-gxw-codec">
@@ -69,9 +66,6 @@
         </option>
         <option>
             <label>G726E</label><value>99</value>
-        </option>
-        <option>
-            <label>None</label><value></value>
         </option>
     </enum>
 </type>

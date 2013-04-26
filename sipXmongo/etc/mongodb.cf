@@ -46,12 +46,6 @@ bundle agent mongodb {
     mongod_arbiter::
       "any" usebundle => mongodb_arbiter_config;
 
-    mongod|mongod_arbiter::
-      "any" usebundle => allow_ssh_command("mongodb-admin");
-
-    !(mongod|mongod_arbiter)::
-      "any" usebundle => disallow_ssh_command("mongodb-admin");
-
     fedora16_or_greater.mongodb_redhat::
       "any" usebundle => mongodb_systemctl_running;
 
@@ -62,15 +56,12 @@ bundle agent mongodb {
     any::
       "any" usebundle => mongodb_arbiter_running;
 
-    primary.setup::
-      "any" usebundle => mongodb_initialize;
-
     any::
       # at this moment, all setups get mongo client config
-      "any" usebundle => mongodb_client;
+      "any" usebundle => "mongodb_client";
 
     sipxlogwatcher::
-      "any" usebundle => mongo_logwatcher;
+      "any" usebundle => "mongo_logwatcher";
 }
 
 bundle agent mongo_logwatcher {
@@ -136,13 +127,6 @@ bundle agent mongodb_config {
         perms => m("644"),
         edit_line => set_variable_values("mongodb_config.server"),
         classes => if_repaired("restart_mongod");
-
-      "$(mongodb.config)"
-        comment => "install mongo config $(this.promiser)",
-        create => "false",
-        perms => m("644"),
-        edit_line => set_variable_values("mongodb_config.server"),
-        classes => if_repaired("restart_mongod");
 }
 
 bundle edit_line mongo_client_config {
@@ -193,7 +177,7 @@ bundle agent mongodb_arbiter_running {
         comment => "start mongo arbiter",
         args => "start";
 
-    mongod_arbiter.mongo_arbiter_running.(restart_mongo_arbiter|RESTART_ARBITER)::
+    mongod_arbiter.mongo_arbiter_running.restart_mongo_arbiter::
       "$(service)"
         comment => "restart mongo arbiter",
         args => "restart";
@@ -226,7 +210,7 @@ bundle agent mongodb_sysv_running {
         comment => "start mongo",
         args => "start";
 
-    mongod.mongodb_running.(restart_mongod|RESTART_DATABASE)::
+    mongod.mongodb_running.restart_mongod::
       "$(service)"
         comment => "restart mongo",
         args => "restart";
@@ -260,7 +244,7 @@ bundle agent mongodb_systemctl_running {
         comment => "enable iptables",
         args => "enable $(service)";
 
-    mongod.mongodb_running.(restart_mongod|RESTART_DATABASE)::
+    mongod.mongodb_running.restart_mongod::
       "$(sipx.systemctl)"
         comment => "restart mongo",
         args => "restart $(service)";
@@ -302,27 +286,4 @@ bundle agent mongodb_client {
         perms => m("644"),
         edit_line => mongo_client_config,
         classes => if_repaired("mongodb_client_reconnect");
-}
-
-bundle agent mongodb_initialize {
-  vars:
-    "config" string => "$(sipx.SIPX_CFDATA)/mongo.json";
-    "default_contents" string => "{\"servers\":[\"$(sipx.host).$(sipx.net_domain):27017\"],\"replSet\":\"sipxecs\"}";
-
-  classes:
-    "has_config" expression => fileexists("$(config)");
-
-  files:
-    !has_config::
-      "$(config)",
-        comment => "Create initial mongo cluster db model $(this.promiser)",
-        create => "true",
-        perms => mog("644", "$(sipx.SIPXPBXUSER)", "$(sipx.SIPXPBXGROUP)"),
-        edit_line => insert_lines("$(default_contents)");
-
-  commands:
-    any::
-      "$(sipx.SIPX_BINDIR)/mongodb-admin"
-        comment => "Initialize mongodb if it's not already initialized",
-        args => "--host_port $(sipx.host).$(sipx.net_domain):27017 INITIALIZE";
 }

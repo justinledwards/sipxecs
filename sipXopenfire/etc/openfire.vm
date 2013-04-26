@@ -59,5 +59,4 @@
   <clustering>
     <enabled>$clusteringState</enabled>
   </clustering>
-  <locale>$locale</locale>
 </jive>

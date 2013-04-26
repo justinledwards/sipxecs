@@ -15,7 +15,6 @@ import org.sipfoundry.commons.mongo.MongoConstants;
 import org.sipfoundry.sipxconfig.common.User;
 import org.sipfoundry.sipxconfig.forwarding.CallSequence;
 import org.sipfoundry.sipxconfig.proxy.ProxyManager;
-import org.sipfoundry.sipxconfig.time.NtpManager;
 
 public class UserCallForwardTestIntegration extends ImdbTestCase {
     private final String[][] USER_DATA = {
@@ -36,19 +35,24 @@ public class UserCallForwardTestIntegration extends ImdbTestCase {
         super.onSetUpInTransaction();
         m_users = new ArrayList<User>();
         for (String[] ud : USER_DATA) {
-            User user = getCoreContext().newUser();
+            User user = new User();
+            user.setPermissionManager(getPermissionManager());
+            user.setProxyManager(m_proxyManager);
             user.setUniqueId(new Integer(ud[0]));
             user.setFirstName(ud[1]);
             user.setLastName(ud[2]);
             user.setUserName(ud[3]);
             user.setSettingTypedValue(CallSequence.CALL_FWD_TIMER_SETTING, ud[4]);
+            user.setDomainManager(getDomainManager());
             m_users.add(user);
         }
 
         // add user with un-set value for cfwd timer - it is supposed to generate the default one
         // for this user at 20
-        User user = getCoreContext().newUser();
-        
+        User user = new User();
+        user.setPermissionManager(getPermissionManager());
+        user.setDomainManager(getDomainManager());
+        user.setProxyManager(m_proxyManager);
         user.setFirstName("first");
         user.setLastName("last");
         user.setUserName("200");
@@ -72,5 +76,4 @@ public class UserCallForwardTestIntegration extends ImdbTestCase {
     public void setProxyManager(ProxyManager proxyManager) {
         m_proxyManager = proxyManager;
     }
-
 }

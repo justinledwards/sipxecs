@@ -45,8 +45,6 @@ public class Configuration {
     private String m_ProvisionSipPassword = DEFAULT_STRING;
 
     private String m_ConfigurationUri = DEFAULT_STRING;
-    
-    private String m_PolycomDefaultVersion = "4.0.X";
 
     private static final String DEBUG_BY_DEFAULT = "false";
 
@@ -71,8 +69,7 @@ public class Configuration {
             m_useSecure = (new Boolean(prov_config.getProperty("provision.servlet.useSecure", "false"))).booleanValue();
             m_ProvisionSipUsername = prov_config.getProperty("provision.username", DEFAULT_STRING);
             m_ProvisionSipPassword = prov_config.getProperty("provision.password", DEFAULT_STRING);
-            m_ConfigurationUri = prov_config.getProperty("provision.configUrl", DEFAULT_STRING);
-            m_PolycomDefaultVersion =  prov_config.getProperty("polycom.default", "4.0.X");
+            m_ConfigurationUri  = prov_config.getProperty("provision.configUrl", DEFAULT_STRING);
         }
     }
 
@@ -151,10 +148,6 @@ public class Configuration {
         return m_ProvisionSipPassword;
     }
 
-    public String getPolycomDefaultVersion() {
-        return m_PolycomDefaultVersion;
-    }
-    
     public long getQueueDebugPostProvisionSleepTime() {
         return isDebugOn() ? 50 : 0;
     }

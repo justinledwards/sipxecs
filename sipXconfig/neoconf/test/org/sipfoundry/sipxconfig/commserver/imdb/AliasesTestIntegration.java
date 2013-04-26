@@ -23,8 +23,12 @@ public class AliasesTestIntegration extends ImdbTestCase {
     protected void onSetUpBeforeTransaction() {
         Collection<AliasMapping> aliases = new ArrayList<AliasMapping>();
         aliases.add(new AliasMapping("301@example.org", "\"John Doe\"<sip:john.doe@" + DOMAIN + ">", "alias"));
-        m_user = getCoreContext().newUser();
+        m_user = new User();
         m_user.setUniqueId(1);
+        m_user.setDomainManager(getDomainManager());
+        m_user.setPermissionManager(getPermissionManager());
+        m_user.setAddressManager(getAddressManager());
+        m_user.setForwardingContext(getForwardingContext());
     }
 
     public void testGenerate() throws Exception {

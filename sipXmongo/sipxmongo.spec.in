@@ -64,7 +64,5 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(644,root,root,755)
 %attr(755,root,root) %{_sysconfdir}/sipxpbx/mongo/mongo.sec.erb
 %attr(755,root,root) %{_sysconfdir}/init.d/mongod-arbiter
-%attr(755,root,root) %{_bindir}/mongodb-status
-%attr(755,root,root) %{_bindir}/mongodb-analyzer
-%attr(755,root,root) %{_bindir}/mongodb-admin
+%attr(755,root,root) %{_bindir}/mongodb-repair
 %{_datadir}/sipxecs/cfinputs/plugin.d/mongodb.cf

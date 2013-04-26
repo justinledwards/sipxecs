@@ -1,2 +1,0 @@
-COMMAND:RENAME swift.huber.us:27018 new_name:27018
-RS:c = rs.config(); c.members[9999].host = "new_name:27018"; rs.reconfig(c);

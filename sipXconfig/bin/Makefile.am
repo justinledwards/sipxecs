@@ -10,8 +10,7 @@ initd_SCRIPTS = \
 	sipxconfig
 
 bin_SCRIPTS = \
-    sipxconfig-archive \
-    sipxconfig_archive.rb
+    sipxconfig-archive
 
 $(initd_SCRIPTS) $(bin_SCRIPTS) : % : %.in Makefile
 	@$(call SearchAndReplace,$<,$@,$(EXTRA_REPLACE))

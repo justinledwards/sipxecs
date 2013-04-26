@@ -1,6 +1,6 @@
 # Initial Version Copyright (C) 2010 eZuce, Inc., All Rights Reserved.
 # Licensed to the User under the LGPL license.
-#
+# 
 OPTIONS = @OPTIONS@
 DOWNLOAD_LIB_CACHE = @DOWNLOAD_LIB_CACHE@
 
@@ -140,7 +140,7 @@ help.{sipx}.dist-changes = List changes since last tarball was built.
 $(sipx:=.dist-changes) :
 	@! test -f $($(PROJ)_TAR) || $(call build_on_change,$($(PROJ)_TAR))
 
-# This first checks if any files have changed in a project, if not, then
+# This first checks if any files have changed in a project, if not, then 
 # checks if any dependent projects were build since this project was
 # build. If so clear the build file
 help.{sipx|lib}.dist = Build archive, typically compressed tar
@@ -166,7 +166,7 @@ $(sipx:=.dist): %.dist : $$(addsuffix .dist,$$(filter-out $$(lib_all),$$($$*_DEP
 	  $(MAKE) $(PROJ).dist-only; \
 	fi
 
-# Targets for sipx only.
+# Targets for sipx only. 
 MAKE_COMMANDS = check install clean dist
 $(foreach C,$(MAKE_COMMANDS) all,$(eval help.{sipx}.$(C)=Run make $(C) on each project))
 $(foreach P,$(sipx),$(P).install) :; $(MAKE) -C $(PROJ) install

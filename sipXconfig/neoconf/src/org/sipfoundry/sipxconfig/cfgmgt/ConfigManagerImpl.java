@@ -78,7 +78,6 @@ public class ConfigManagerImpl implements AddressProvider, ConfigManager, BeanFa
     private Set<String> m_registeredIps;
     private boolean m_postSetup;
     private final Object m_lock = new Object();
-    private String m_remoteCommand = "/usr/bin/ssh -i %s/.cfagent/ppkeys/localhost.nopass.priv root@%s";
     private boolean m_flag;
 
     @Override
@@ -93,12 +92,6 @@ public class ConfigManagerImpl implements AddressProvider, ConfigManager, BeanFa
             m_worker.workScheduled();
             m_worker.notify();
         }
-    }
-
-    public String getRemoteCommand(String server) {
-        String home = System.getProperty("user.home");
-        return String.format(m_remoteCommand, home, server);
-
     }
 
     @Override
@@ -156,14 +149,6 @@ public class ConfigManagerImpl implements AddressProvider, ConfigManager, BeanFa
         runProviders(request, jobLabel);
         runCfengine(request, jobLabel);
         runPostProviders(request, jobLabel);
-    }
-
-    @Override
-    public void run() {
-        ConfigRequest work = getWork();
-        if (work != null) {
-            doWork(work);
-        }
     }
 
     @Override
@@ -341,8 +326,8 @@ public class ConfigManagerImpl implements AddressProvider, ConfigManager, BeanFa
         @Override
         protected boolean work() {
             ConfigRequest work = getWork();
-            // work could be null if call to run() was made explicitly
-            // then this is a nop.
+            // check null, it's possible work has been done by the time we
+            // have gotten around to it
             if (work != null) {
                 doWork(work);
             }
@@ -442,10 +427,6 @@ public class ConfigManagerImpl implements AddressProvider, ConfigManager, BeanFa
 
     public void setUploadDir(String uploadDir) {
         m_uploadDir = uploadDir;
-    }
-
-    public void setRemoteCommand(String remoteCommand) {
-        m_remoteCommand = remoteCommand;
     }
 
     @Override

@@ -68,7 +68,7 @@
 		<timezone perm="R">USA-5</timezone>
 		<utc_offset perm="RW"></utc_offset>
 		<dst perm="RW"></dst>
-		<ntp_server perm="R">testdriver.example.org</ntp_server>
+		<ntp_server perm="R">ntp.example.org</ntp_server>
 		<ntp_refresh_timer perm="R">3600</ntp_refresh_timer>
 		<http_user perm="R"></http_user>
 		<http_pass perm="R"></http_pass>
@@ -82,7 +82,7 @@
 		<lcserver1 perm="R"></lcserver1>
 		<snmp_port perm="R">161</snmp_port>
 		<snmp_trusted_addresses perm="R"></snmp_trusted_addresses>
-		<syslog_server perm="R">testdriver.example.org</syslog_server>
+		<syslog_server perm="R">10.4.5.2</syslog_server>
 		<ethernet_detect perm="R">on</ethernet_detect>
 		<ethernet_replug perm="R">nothing</ethernet_replug>
 		<eth_net perm="R">auto</eth_net>
@@ -125,7 +125,6 @@
 		<family_ring_sound perm="R">Ringer1</family_ring_sound>
 		<friends_ring_sound perm="R">Ringer1</friends_ring_sound>
 		<colleagues_ring_sound perm="R">Ringer1</colleagues_ring_sound>
-		<alert_external_ring_sound perm="R">Ringer1</alert_external_ring_sound>
 		<custom_melody_url perm="R"></custom_melody_url>
 		<ring_sound perm="R">Ringer1</ring_sound>
 		<ringing_time perm="R">60</ringing_time>
@@ -177,7 +176,6 @@
 		<support_idna perm="R">off</support_idna>
 		<auto_logoff_time perm="R"></auto_logoff_time>
 		<message_led_other perm="R">on</message_led_other>
-		<ignore_security_warning perm="R">on</ignore_security_warning>
 		<dkey_retrieve perm="R">speed 101</dkey_retrieve>
 
 		<!-- speeddial list -->
@@ -192,7 +190,7 @@
 		<user_failover_identity idx="1" perm="R">none</user_failover_identity>
 		<user_pname idx="1" perm="R">juser</user_pname>
 		<user_mailbox idx="1" perm="R">juser</user_mailbox>
-		<user_ringer idx="1" perm="RW">Ringer1</user_ringer>
+		<user_ringer idx="1" perm="R">Ringer1</user_ringer>
 		<user_custom idx="1" perm="R"></user_custom>
 		<user_idle_text idx="1" perm="R"></user_idle_text>
 		<ring_after_delay idx="1" perm="R"></ring_after_delay>
@@ -252,7 +250,7 @@
 		<user_failover_identity idx="2" perm="R">none</user_failover_identity>
 		<user_pname idx="2" perm="R"></user_pname>
 		<user_mailbox idx="2" perm="R"></user_mailbox>
-		<user_ringer idx="2" perm="RW">Ringer1</user_ringer>
+		<user_ringer idx="2" perm="R">Ringer1</user_ringer>
 		<user_custom idx="2" perm="R"></user_custom>
 		<user_idle_text idx="2" perm="R"></user_idle_text>
 		<ring_after_delay idx="2" perm="R"></ring_after_delay>
@@ -312,7 +310,7 @@
 		<user_failover_identity idx="3" perm="R">none</user_failover_identity>
 		<user_pname idx="3" perm="R"></user_pname>
 		<user_mailbox idx="3" perm="R"></user_mailbox>
-		<user_ringer idx="3" perm="RW">Ringer1</user_ringer>
+		<user_ringer idx="3" perm="R">Ringer1</user_ringer>
 		<user_custom idx="3" perm="R"></user_custom>
 		<user_idle_text idx="3" perm="R"></user_idle_text>
 		<ring_after_delay idx="3" perm="R"></ring_after_delay>
@@ -372,7 +370,7 @@
 		<user_failover_identity idx="4" perm="R">none</user_failover_identity>
 		<user_pname idx="4" perm="R"></user_pname>
 		<user_mailbox idx="4" perm="R"></user_mailbox>
-		<user_ringer idx="4" perm="RW">Ringer1</user_ringer>
+		<user_ringer idx="4" perm="R">Ringer1</user_ringer>
 		<user_custom idx="4" perm="R"></user_custom>
 		<user_idle_text idx="4" perm="R"></user_idle_text>
 		<ring_after_delay idx="4" perm="R"></ring_after_delay>
@@ -443,13 +441,4 @@
 		<fkey idx="10" context="active" perm="R">line</fkey>
 		<fkey idx="11" context="active" perm="R">line</fkey>
 	</functionKeys>
-	<!-- Retrieving tftp server to provision web-language and language -->
-
-        <web-languages>
-        </web-languages>
-
-        <!-- Snom Language -->
-        <gui-languages>
-        </gui-languages>
-
 </settings>
