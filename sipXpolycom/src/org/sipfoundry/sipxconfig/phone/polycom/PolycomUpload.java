@@ -18,8 +18,10 @@ package org.sipfoundry.sipxconfig.phone.polycom;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.FileFilter;
 
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.filefilter.WildcardFileFilter;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.sipfoundry.sipxconfig.upload.Upload;
@@ -28,7 +30,8 @@ public class PolycomUpload extends Upload {
     private static final Log LOG = LogFactory.getLog(PolycomUpload.class);
     private static final String POLYCOM_DIR = "/polycom/";
     private static final String VERSION = "firmware/version";
-    private static final String SIP_APP = "sip.ld";
+    private static final String SIP_APP = "*.sip.ld";
+
     private String m_profileDir;
 
     public String getProfileDir() {
@@ -46,10 +49,11 @@ public class PolycomUpload extends Upload {
         File destinationFolder = new File(destination);
         super.setDestinationDirectory(destination);
         super.deploy();
-        // we need to make sure however is packed polycom fw (sip.ld)will be in
+        // we need to make sure however is packed polycom fw (*.sip.ld)will be in
         // polycom/{VERSION}
-        File sipApp = new File(destination + SIP_APP);
-        if (sipApp.exists()) {
+        FileFilter fileFilter = new WildcardFileFilter(SIP_APP);
+        File[] sipApp = destinationFolder.listFiles(fileFilter);
+        if (sipApp.length != 0) {
             return;
         }
         // This means it is packed in another folder (thanks Polycom)
@@ -60,7 +64,7 @@ public class PolycomUpload extends Upload {
             if (folder[i].isFile()) {
                 continue;
             }
-            if (!new File(folder[i], SIP_APP).exists()) {
+            if (folder[i].listFiles(fileFilter).length == 0) {
                 continue;
             }
             fwFolder = folder[i];
