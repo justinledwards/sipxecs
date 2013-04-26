@@ -35,6 +35,7 @@ import org.sipfoundry.sipxconfig.cfgmgt.KeyValueConfiguration;
 import org.sipfoundry.sipxconfig.common.AbstractUser;
 import org.sipfoundry.sipxconfig.common.CoreContext;
 import org.sipfoundry.sipxconfig.common.User;
+import org.sipfoundry.sipxconfig.localization.LocalizationContext;
 import org.springframework.beans.factory.annotation.Required;
 
 public class OpenfireConfigurationFile {
@@ -54,6 +55,7 @@ public class OpenfireConfigurationFile {
 
     private LdapManager m_ldapManager;
     private CoreContext m_coreContext;
+    private LocalizationContext m_localizationContext;
     private VelocityEngine m_velocityEngine;
 
     public void write(Writer writer) throws IOException {
@@ -63,6 +65,7 @@ public class OpenfireConfigurationFile {
         context.put("authorizedUsernames", getAuthorizedUsernames());
         context.put("clusteringState", m_clusteringState);
         context.put("isEnableOpenfireConfiguration", isEnableOpenfireConfiguration);
+        context.put("locale", m_localizationContext.getCurrentLanguage());
         List<LdapConnectionParams> allParams = m_ldapManager.getAllConnectionParams();
         if (!isEnableOpenfireConfiguration || allParams == null || allParams.isEmpty()) {
         } else if (!allParams.isEmpty()) {
@@ -151,6 +154,11 @@ public class OpenfireConfigurationFile {
     @Required
     public void setCoreContext(CoreContext coreContext) {
         m_coreContext = coreContext;
+    }
+
+    @Required
+    public void setLocalizationContext(LocalizationContext localizationContext) {
+        m_localizationContext = localizationContext;
     }
 
     public void setVelocityEngine(VelocityEngine velocityEngine) {

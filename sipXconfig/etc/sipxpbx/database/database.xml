@@ -449,6 +449,7 @@
   	<antcall target="branch-timezone" />
     <antcall target="cisco-to-linksys"/>
   	<antcall target="add_value_storage_to_openacdline"/>
+  	<antcall target="branch-timezone" />
   </target>
 
   <target name="plugin-patches">

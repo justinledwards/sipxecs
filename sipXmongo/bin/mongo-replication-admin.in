@@ -1,0 +1,428 @@
+#!/bin/env python
+
+# Mongo replication setup and administration tool for a cluster of
+# mongo db servers
+
+# Deprecation note: intentionally using deprecated Connection class because 
+# class MongoClient is not available yet in pymongo on centos 6
+from pymongo import Connection
+from pymongo.errors import PyMongoError, AutoReconnect
+
+import sys
+import traceback
+import logging
+import argparse
+import json
+import bson.timestamp
+import datetime
+
+ERR_MONGO_ASSERTION = 1
+ERR_NOT_INIT = 2
+ERR_ILLEGAL_ARGS = 3
+ERR_STATUS_CONFIG_MISMATCH = 4
+ERR_UNDETERMINED_MASTER = 5
+ERR_BAD_STATE = 6
+ERR_NO_PRIMARY_CANDIDATE = 7
+
+class MongoAdminException(Exception):
+    
+    def __init__(self, exit_code, value):
+        self.exit_code = exit_code
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
+
+    def code(self):
+        return self.exit_code
+
+class MongoAdmin:
+    NEW = 0
+    INIT = 1
+    SINGLE_MASTER = 2
+    VALID_SETUP = 3
+    HEALTHY = 4
+    def __init__(self, hosts, replSet):
+        self.hosts = hosts
+        self.replSet = replSet
+        self.state = MongoAdmin.NEW
+
+    def needsState(self, level):
+        # maintain state machine to support a variety of mongo configurations
+        # and possible mis-configurations.
+        if self.onStateChange(level, MongoAdmin.INIT):
+            self.invalidOnUninitialized()
+            self.loadMeta()
+            self.state = MongoAdmin.INIT
+        if self.onStateChange(level, MongoAdmin.SINGLE_MASTER):
+            self.invalidOnNoPrimaryCandidate()
+            self.invalidOnMultiMaster()
+            self.state = MongoAdmin.SINGLE_MASTER
+        if self.onStateChange(level, MongoAdmin.VALID_SETUP):
+            self.invalidOnOutOfSync()
+            self.state = MongoAdmin.VALID_SETUP
+        if self.onStateChange(level, MongoAdmin.HEALTHY):
+            self.state = MongoAdmin.HEALTHY
+
+    def cmd_status(self, ignored):
+        self.loadMeta()
+        print '['
+        for i in range(len(self.meta)):
+            if i != 0:
+                print ','
+            sys.stdout.write(json.dumps(self.meta[i], cls=MongoJSONEncoder))
+        print '\n]'
+        
+    def cmd_remove(self, host_port):
+        self.needsState(MongoAdmin.SINGLE_MASTER)
+        self.basicOperationOnPrimary('remove', host_port)
+
+    def cmd_addArbiter(self, host_port):
+        self.needsState(MongoAdmin.SINGLE_MASTER)
+        self.basicOperationOnPrimary('addArb', host_port)
+
+    def cmd_add(self, host_port):
+        self.needsState(MongoAdmin.SINGLE_MASTER)
+        self.basicOperationOnPrimary('add', host_port)
+
+    def cmd_analyze(self, ignored):
+        self.needsState(MongoAdmin.HEALTHY)
+        print "ok"
+
+    def cmd_initialize(self, ignored):
+        self.ensureSingleHostOperation()
+        def functor(c, host_port):
+            l = c['local']
+            config = self.eval(l, 'rs.config()')
+            if None == config:
+                op = 'rs.initiate({"_id" : "%s", "version" : 1, "members" : ' \
+                    '[{ "_id" : 0, "host" : "%s"}]})' % (self.replSet, host_port)
+                logging.debug('initializing replicaset')
+                self.checkErr(self.eval(l, op))
+            else:
+                logging.debug('replicaset already initialized')                
+        self.onServer(self.hosts[0], functor)
+
+    def cmd_forcePrimary(self, ignored):
+        self.ensureSingleHostOperation()
+        self.needsState(MongoAdmin.INIT)
+        # all other servers need to be restarted before they can be added back in, 
+        # otherwise they will get following errors:
+        #
+        #   [rsMgr] replSet error unexpected exception in haveNewConfig() : 0 assertion db/repl/rs.cpp:440
+        #   [rsMgr] replSet error fatal, stopping replication
+        #
+        def functor(c, host_port):
+            l = c['local']
+            config = self.eval(l, "rs.config()")
+            id = None
+            maxId = 0
+            for m in config['members']:
+                if m['host'] == host_port:
+                    id = m['_id']
+                    break
+                maxId = max(maxId, m['_id'])
+
+            if id == None:
+                id = maxId + 1
+
+            cmd = 'rs.reconfig({"_id" : "%s", "members" : ' \
+                  '[{"_id" : %s, "host" : "%s"}]}, {force : true})' \
+                  % (self.replSet, id, host_port)
+            config = self.eval(l, cmd)
+        self.onServer(self.hosts[0], functor)
+        self.cmd_initialize(ignored)
+
+    def cmd_resyncFrom(self, host_port):
+        print "TODO"
+        
+    def cmd_rename(self, ignored):
+        self.needsState(MongoAdmin.SINGLE_MASTER)
+        cmd = ''
+        for m in self.meta:
+            i = 0
+            for member in m['status']['members']:
+                if 'self' in member and member['self']:
+                    if member['name'] != m['server']:
+                        cmd += 'c.members[%d].host = "%s";' % (i, m['server']);
+                i += 1
+
+        if cmd == '':
+            logging.debug("No renaming neccessary")
+            return
+
+        def functor(c, host_port):
+            l = c['local']
+            # NOTE: Rename from localhost causes internal assertion. Tested: mongo server 2.0
+            full_cmd = 'c = rs.config(); ' + cmd + ' rs.reconfig(c);'
+            self.checkErr(self.eval(l, full_cmd))
+        self.onPrimary(functor);
+
+    def eval(self, db, command):
+        logging.debug(command)
+        return db.eval(command)
+
+    def basicOperationOnPrimary(self, op, host_port):
+        def functor(c, primary_server):
+            l = c['local']
+            self.checkErr(self.eval(l, 'rs.%s("%s")' % (op, host_port)))
+        c = self.onPrimary(functor)
+
+    def getPrimaryHostPort(self):
+        find_primary = lambda m: m['stateStr'] == 'PRIMARY'
+        return self.members('status', find_primary)[0]['name']
+
+    def onPrimary(self, functor):
+        primary = self.getPrimaryHostPort()
+        self.onServer(primary, functor)
+
+    def onServer(self, host_port, functor):
+        c = Connection(host_port)
+        try :
+            functor(c, host_port)
+        except AutoReconnect:
+            # some commands succeed, but trigger a disconnect of all client
+            # we're closing the connection anyway, so disregard
+            pass
+        finally:
+            c.close()
+
+    def checkErr(self, err):
+        if err and 'assertion' in err:
+            logging.debug(err)
+            raise MongoAdminException(ERR_MONGO_ASSERTION, err['assertion'])
+
+    def loadMetaForHost(self, host_port):
+        m = None
+        c = None
+        cfg = None
+        try:
+            c = Connection(host_port)
+            logging.debug('getting status')
+            l = c['local']
+            cfg = self.eval(l, 'rs.config()')
+            status = self.eval(l, 'rs.status()')
+            state = self.getState(host_port, cfg, status)
+            m = {'server' : host_port, 'state' : state, 'status' : status, 'config' : cfg}
+            c.close
+            c = None
+
+        except PyMongoError as e:
+            m = {'server' : host_port, 'state' : 'UNAVAILABLE', 'role' : 'UKNOWN'}
+
+        finally:
+            if c != None:
+                logging.debug('closing connection')
+                c.close()
+
+        return m
+    
+    def getState(self, host_port, cfg, status):
+        state = 'UNKNOWN'
+        states = ['STARTUP1', 'PRIMARY', 'SECONDARY', 'RECOVERING', 'FATAL_ERROR',
+          'STARTUP2', 'UNKNOWN', 'ARBITER', 'DOWN', 'ROLLBACK', 'REMOVED']
+
+        if status:
+            if 'myState' in status:              
+              state = states[int(status['myState'])]
+
+            # additional checks for misconfigured ssytems
+            if 'set' in status and status['set'] != self.replSet:
+                state = 'MISCONFIGURED'
+                logging.debug('bad replset ' + status['set'])
+            elif 'startupStatus' in status:
+                startStat = status['startupStatus']
+                logging.debug('uninitialized, start status %d' % startStat)
+                # only saw 3 on db and 1 on arbiter before
+                if startStat == 3 :
+                    state = 'UNINITIALIZED'
+                else:
+                    state = 'MISCONFIGURED'
+            elif 'members' in status:
+                for m in status['members']:
+                    if 'self' in m:
+                        if m['name'] != host_port:
+                            logging.debug('member hostname does not match ' + m['name'])
+                            state = 'NAME_MISMATCH'
+        return state
+
+    def loadMeta(self):
+        self.meta = []
+        for h in self.hosts:
+            m = self.loadMetaForHost(h)
+            self.meta.append(m)
+
+    # Some command operation only on a single mongo server and do not consider
+    # the cluster.
+    def ensureSingleHostOperation(self):
+        if len(self.hosts) > 1:
+            raise MongoAdminException(ERR_ILLEGAL_ARGS, 
+                "For this particular command you must specify only one host")
+
+    def invalidOnNoPrimaryCandidate(self):
+        def functor(m):
+           state = m['stateStr']
+           return state != 'STARTUP2' and state != 'STARTUP' and state != 'ARBITER'
+        candidates = self.members('status', functor)
+        if len(candidates) == 0:
+            raise MongoAdminException(ERR_NO_PRIMARY_CANDIDATE, 'Cannot find a server ' \
+                'that was originally initialized to be a primary server. You must shutdown ' \
+                'all other servers, select a server to be primary server, clear that ' \
+                'server\'s database and then add other servers back in')
+            
+    def invalidOnUninitialized(self):
+        def functor(c, host_port):
+            l = c['local']
+            if self.eval(l, "rs.config()") == None:
+                raise MongoAdminException(ERR_NOT_INIT, "Database on %s is not initialized" \
+                    % host_port)
+        self.onServer(self.hosts[0], functor)
+
+    def invalidOnMultiMaster(self):
+        primary_count = 0
+        secondary_count = 0
+        server_count = 0
+        finder = lambda m: 'self' in m
+        for m in self.members('status', finder):
+            server_count += 1
+            if m != None:
+                if m['stateStr'] == 'PRIMARY':
+                    primary_count += 1
+                elif m['stateStr'] == 'SECONDARY':
+                    secondary_count += 1
+
+        if primary_count > 1:
+            raise MongoAdminException(ERR_UNDETERMINED_MASTER, 'Expected 1 primary server but ' \
+                'found %d. You will need to force one server to be primary.' % primary_count)
+        if primary_count == 0 and server_count > 1:
+            raise MongoAdminException(ERR_UNDETERMINED_MASTER, 'No primary server found. ' \
+                'It is possible one of the other servers is in the process of taking over ' \
+                'as primary and you should wait a few seconds.')
+        if primary_count == 0 and secondary_count == 0:
+            raise MongoAdminException(ERR_UNDETERMINED_MASTER, 'No primary server found.')
+        if primary_count == 0 and server_count == 1 and secondary_count == 1:
+            raise MongoAdminException(ERR_UNDETERMINED_MASTER, 'No primary server found. It ' \
+                'is possible that the server is still initializing. It can take up to one ' \
+                'minute for initialization.')
+                
+    def invalidOnOutOfSync(self):        
+        for m in self.meta:
+            host_port = m['server']
+            status_members = m['status']['members']
+            config_members = m['config']['members']
+            if len(status_members) != len(config_members):
+                raise MongoAdminException(ERR_STATUS_CONFIG_MISMATCH, 
+                    'Mismatch status and configuration on %s. Server may need to be restarted ' \
+                        % host_port)
+                
+            findConfig = lambda x : x['host'] == host_port
+            c = self.members('config', findConfig)
+            findStatus = lambda x : x['name'] == host_port
+            s = self.members('status', findStatus)
+            if c is None:
+                raise MongoAdminException(ERR_BAD_STATE, 
+                    'Cannot find config for %s' % host_port)
+            if s is None:
+                raise MongoAdminException(ERR_BAD_STATE, 
+                    'Cannot find status for %s' % host_port)
+
+            count = len(self.meta)
+            if count != len(config_members):
+                raise MongoAdminException(ERR_ILLEGAL_ARGS, 
+                    'Found configuration for %d server(s) but %d host(s) parameters was specified on ' \
+                    'command line.  Configuration read from %s.' \
+                    % (len(config_members), count, host_port))
+
+    # member entry that represents host you're connected to
+    def members(self, config_or_status, predicate):
+        r = []
+        for s in self.meta:
+            for m in s[config_or_status]['members']:
+                if predicate(m):
+                    r.append(m)
+        return r
+
+    def onStateChange(self, requirement, candidate):
+        return requirement >= candidate and self.state < candidate
+
+class MongoJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, bson.timestamp.Timestamp):
+            return obj.time
+        elif isinstance(obj, datetime.datetime):
+            return obj.isoformat()
+        else:
+            return super(MongoJSONEncoder, self).default(obj)    
+
+if __name__ == '__main__':
+    c = None
+    # Parse arguments
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description='Mongo/sipXecs administration tools'
+        )
+    parser.formatter_class = argparse.ArgumentDefaultsHelpFormatter
+    parser.add_argument('--host',  metavar='host[:port]', nargs='+', required=True, default=[],
+                help='server[:port] to connect to')
+    parser.add_argument('--add',  metavar='host[:port]',
+            help='server[:port] to add to replica config')
+    parser.add_argument('--addArbiter',  metavar='host[:port]',
+            help='server[:port] to add as arbiter')
+    parser.add_argument('--remove',  metavar='name',
+                help='server[:port] to remove from replica config')
+    parser.add_argument('--forcePrimary', action="store_true",
+                help='server[:port] to be the only server and therefore the primary')
+    parser.add_argument('--resyncFrom',  metavar='host[:port]',
+                help='server[:port] to grab rs.config() from')
+    parser.add_argument('--status', action="store_true",
+                help='return status from each server in JSON format')
+    parser.add_argument('--analyze', action="store_true",
+                help='check servers for any misconfiguration')
+    parser.add_argument('--rename', action="store_true",
+                help='Check each server\'s host name[:port] and ensure it matches host names passed --host parameters')
+    parser.add_argument('--initialize', action="store_true",
+                help='Initialize replication information. Only useful on primary.')
+    parser.add_argument('--verbose', action="store_true", default=False,
+                help='verbose output')
+    parser.add_argument('--replSet', metavar="name", default='sipxecs',
+                help='replication set. Only useful to change when testing')
+    args = vars(parser.parse_args())
+
+    try:
+        level = None
+        if args['verbose']:
+            level = logging.DEBUG        
+        logging.basicConfig(
+            level=level,
+            format='.%(message)s'
+        )
+
+        replSet = args['replSet']
+        admin = MongoAdmin(args['host'], replSet)
+        for op in args.keys():
+            params = args[op]
+            opMethod = "cmd_" + op
+            try :
+                member = getattr(admin, opMethod)
+                if member != None and params != False and params != None:
+                    logging.debug("%s", op)
+                    member(params)
+
+            except AttributeError as normal:
+                pass # many args will trigger this
+
+    except MongoAdminException as e:
+        print e
+        exit(e.code())
+
+    except :
+        print '-'*120
+        print sys.exc_info()
+        traceback.print_exc()
+        print '-'*120
+        exit(1)
+            
+    finally:
+        if c != None:
+            logging.debug('closing connection')
+            c.close()

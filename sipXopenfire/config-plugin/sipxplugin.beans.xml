@@ -51,6 +51,7 @@
     <property name="velocityEngine" ref="velocityEngine" />
     <property name="ldapManager" ref="ldapManager" />
     <property name="coreContext" ref="coreContext" />
+    <property name="localizationContext" ref="localizationContext" />
     <property name="providers">
       <map>
         <entry>

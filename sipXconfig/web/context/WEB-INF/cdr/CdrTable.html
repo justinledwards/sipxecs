@@ -7,6 +7,11 @@
     <span jwcid="@Insert"
       value="ognl:row.termination"
       format="bean:terminationFormat" />
+    <span jwcid="@If" condition="ognl:isHomerEnabled" renderTag="false">
+      <a jwcid="@Any" href="ognl:homerLink" target="_blank">
+        <img jwcid="@Image" image="asset:link" align="absmiddle" title="Go to details" />
+      </a>
+    </span>
   </span>
   <span jwcid="durationColumnValue@Block">
     <span jwcid="@Insert"
