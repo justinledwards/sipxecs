@@ -102,10 +102,7 @@ public class DnsConfig implements ConfigProvider {
     }
 
     void writeResolv(Writer w, Location l, String domain, List<Address> dns) throws IOException {
-        // Only write out search if domain is not FQDN
-        if (!l.getHostname().equals(domain)) {
-            w.write(format("search %s\n", domain));
-        }
+        w.write(format("search %s\n", domain));
 
         // write local dns server first if it exists
         StringBuilder nm = new StringBuilder();
@@ -140,7 +137,7 @@ public class DnsConfig implements ConfigProvider {
         c.write("sip_protocols", "[ udp, tcp, tls ]");
         c.write("naptr_protocols", "[ udp, tcp ]");
         c.write("domain", domain);
-        writeServerYaml(c, all, "proxy_servers", proxy);
+        writeServerYaml(c, all, "proxy_servers", proxy, false);
         c.startArray("resource_records");
         if (rrs != null) {
             for (ResourceRecords rr : rrs) {
@@ -149,28 +146,29 @@ public class DnsConfig implements ConfigProvider {
             }
         }
         c.endArray();
-        writeServerYaml(c, all, "dns_servers", dns);
-        writeServerYaml(c, all, "im_servers", im);
-        writeServerYaml(c, all, "all_servers", Location.toAddresses(DnsManager.DNS_ADDRESS, all));
+        writeServerYaml(c, all, "dns_servers", dns, false);
+        writeServerYaml(c, all, "im_servers", im, false);
+        writeServerYaml(c, all, "all_servers", Location.toAddresses(DnsManager.DNS_ADDRESS, all), true);
     }
 
     /**
      * my-id : [ { :name: my-fqdn, :ipv4: 1.1.1.1 }, ... ]
      */
-    void writeServerYaml(YamlConfiguration c, List<Location> all, String id, List<Address> addresses)
+    void writeServerYaml(YamlConfiguration c, List<Location> all, String id, List<Address> addresses, boolean rewrite)
         throws IOException {
         c.startArray(id);
         if (addresses != null) {
             for (Address a : addresses) {
                 c.nextElement();
-                writeAddress(c, all, a.getAddress(), a.getPort());
+                writeAddress(c, all, a.getAddress(), a.getPort(), rewrite);
             }
         }
         c.endArray();
     }
 
-    void writeAddress(YamlConfiguration c, List<Location> all, String address, int port) throws IOException {
-        String host = getHostname(all, address);
+    void writeAddress(YamlConfiguration c, List<Location> all, String address, int port, boolean rewrite)
+        throws IOException {
+        String host = getHostname(all, address, rewrite);
         if (host != null) {
             c.write(":name", host);
             c.write(":ipv4", address);
@@ -184,14 +182,17 @@ public class DnsConfig implements ConfigProvider {
         c.startArray(":records");
         for (DnsRecord r : rr.getRecords()) {
             c.nextElement();
-            writeAddress(c, all, r.getAddress(), r.getPort());
+            writeAddress(c, all, r.getAddress(), r.getPort(), true);
         }
         c.endArray();
     }
 
-    String getHostname(List<Location> locations, String ip) {
+    String getHostname(List<Location> locations, String ip, boolean rewrite) {
         for (Location l : locations) {
             if (ip.equals(l.getAddress())) {
+                if (rewrite) {
+                    return l.getHostnameInSipDomain();
+                }
                 return l.getFqdn();
             }
         }

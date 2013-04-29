@@ -109,17 +109,17 @@ public class DnsConfigTest {
     public void writeServerYaml() throws IOException {
         StringWriter actual = new StringWriter();
         YamlConfiguration c = new YamlConfiguration(actual);
-        m_config.writeServerYaml(c, m_locations, "robin", null);
+        m_config.writeServerYaml(c, m_locations, "robin", null, false);
         assertEquals("robin:\n", actual.toString());
         
         actual = new StringWriter();
         c = new YamlConfiguration(actual);
-        m_config.writeServerYaml(c, m_locations, "robin", Collections.singletonList(m_a1));
+        m_config.writeServerYaml(c, m_locations, "robin", Collections.singletonList(m_a1), false);
         assertEquals("robin:\n - :name: one\n   :ipv4: 1.1.1.1\n   :port: 0\n", actual.toString());
 
         actual = new StringWriter();
         c = new YamlConfiguration(actual);
-        m_config.writeServerYaml(c, m_locations, "robin", Arrays.asList(m_a1, m_a2));   
+        m_config.writeServerYaml(c, m_locations, "robin", Arrays.asList(m_a1, m_a2), false);   
         String expected = IOUtils.toString(getClass().getResourceAsStream("server.yml"));
         assertEquals(expected, actual.toString());
     }
