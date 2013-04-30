@@ -19,12 +19,14 @@ resource_records:
     - :name: one.example.org
       :ipv4: 1.1.1.1
       :port: 0
+      :target: one.example.org
  - :proto: _xyx._abc
    :resource: rr2
    :records:
     - :name: two.example.org
       :ipv4: 2.2.2.2
       :port: 0
+      :target: two.example.org
 dns_servers:
  - :name: one.example.org
    :ipv4: 1.1.1.1

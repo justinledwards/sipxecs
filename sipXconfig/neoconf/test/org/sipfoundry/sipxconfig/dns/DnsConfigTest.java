@@ -87,7 +87,7 @@ public class DnsConfigTest {
     @Test
     public void emptyZone() throws IOException {
         StringWriter actual = new StringWriter();
-        m_config.writeZoneConfig(actual, "x", m_locations, null, null, null, null, 1);
+        m_config.writeZoneConfig(actual, "x", m_locations, null, null, null, null, 1, true);
         String expected = IOUtils.toString(getClass().getResourceAsStream("empty-zone.yml"));
         assertEquals(expected, actual.toString());
     }
@@ -101,7 +101,7 @@ public class DnsConfigTest {
         ResourceRecords rr2 = new ResourceRecords("_xyx._abc", "rr2");
         rr2.addAddress(m_a2);
         List<ResourceRecords> rrs = Arrays.asList(rr1, rr2);
-        m_config.writeZoneConfig(actual, "x", m_locations, all, all, all, rrs, 1);
+        m_config.writeZoneConfig(actual, "x", m_locations, all, all, all, rrs, 1, true);
         String expected = IOUtils.toString(getClass().getResourceAsStream("full-zone.yml"));
         assertEquals(expected, actual.toString());
     }
@@ -110,17 +110,17 @@ public class DnsConfigTest {
     public void writeServerYaml() throws IOException {
         StringWriter actual = new StringWriter();
         YamlConfiguration c = new YamlConfiguration(actual);
-        m_config.writeServerYaml(c, m_locations, "robin", null, false);
+        m_config.writeServerYaml(c, m_locations, "robin", null);
         assertEquals("robin:\n", actual.toString());
         
         actual = new StringWriter();
         c = new YamlConfiguration(actual);
-        m_config.writeServerYaml(c, m_locations, "robin", Collections.singletonList(m_a1), false);
+        m_config.writeServerYaml(c, m_locations, "robin", Collections.singletonList(m_a1));
         assertEquals("robin:\n - :name: one.example.org\n   :ipv4: 1.1.1.1\n   :port: 0\n", actual.toString());
 
         actual = new StringWriter();
         c = new YamlConfiguration(actual);
-        m_config.writeServerYaml(c, m_locations, "robin", Arrays.asList(m_a1, m_a2), false);   
+        m_config.writeServerYaml(c, m_locations, "robin", Arrays.asList(m_a1, m_a2));   
         String expected = IOUtils.toString(getClass().getResourceAsStream("server.yml"));
         assertEquals(expected, actual.toString());
     }

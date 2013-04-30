@@ -38,6 +38,7 @@ import org.sipfoundry.sipxconfig.cfgmgt.ConfigRequest;
 import org.sipfoundry.sipxconfig.cfgmgt.YamlConfiguration;
 import org.sipfoundry.sipxconfig.commserver.Location;
 import org.sipfoundry.sipxconfig.commserver.LocationsManager;
+import org.sipfoundry.sipxconfig.domain.Domain;
 import org.sipfoundry.sipxconfig.im.ImManager;
 import org.sipfoundry.sipxconfig.proxy.ProxyManager;
 import org.sipfoundry.sipxconfig.registrar.Registrar;
@@ -56,6 +57,7 @@ public class DnsConfig implements ConfigProvider {
         DnsSettings settings = m_dnsManager.getSettings();
         AddressManager am = manager.getAddressManager();
         String domain = manager.getDomainManager().getDomainName();
+        String networkDomain = Domain.getDomain().getNetworkName();
         List<Location> all = manager.getLocationManager().getLocationsList();
         Set<Location> locations = request.locations(manager);
 
@@ -71,7 +73,7 @@ public class DnsConfig implements ConfigProvider {
             if (resolvOn) {
                 Writer resolv = new FileWriter(new File(dir, "resolv.conf.part"));
                 try {
-                    writeResolv(resolv, location, domain, dns);
+                    writeResolv(resolv, location, networkDomain, dns);
                 } finally {
                     IOUtils.closeQuietly(resolv);
                 }
@@ -94,7 +96,8 @@ public class DnsConfig implements ConfigProvider {
             List<Address> im = am.getAddresses(ImManager.XMPP_ADDRESS, location);
             Writer zone = new FileWriter(new File(dir, "zone.yaml"));
             try {
-                writeZoneConfig(zone, domain, all, proxy, im, dns, rrs, serNo);
+                boolean generateARecords = domain.equals(networkDomain);
+                writeZoneConfig(zone, domain, all, proxy, im, dns, rrs, serNo, generateARecords);
             } finally {
                 IOUtils.closeQuietly(zone);
             }
@@ -131,13 +134,14 @@ public class DnsConfig implements ConfigProvider {
     }
 
     void writeZoneConfig(Writer w, String domain, List<Location> all, List<Address> proxy,
-            List<Address> im, List<Address> dns, List<ResourceRecords> rrs, long serNo) throws IOException {
+        List<Address> im, List<Address> dns, List<ResourceRecords> rrs, long serNo, boolean generateARecords)
+        throws IOException {
         YamlConfiguration c = new YamlConfiguration(w);
         c.write("serialno", serNo);
         c.write("sip_protocols", "[ udp, tcp, tls ]");
         c.write("naptr_protocols", "[ udp, tcp ]");
         c.write("domain", domain);
-        writeServerYaml(c, all, "proxy_servers", proxy, false);
+        writeServerYaml(c, all, "proxy_servers", proxy);
         c.startArray("resource_records");
         if (rrs != null) {
             for (ResourceRecords rr : rrs) {
@@ -146,21 +150,23 @@ public class DnsConfig implements ConfigProvider {
             }
         }
         c.endArray();
-        writeServerYaml(c, all, "dns_servers", dns, false);
-        writeServerYaml(c, all, "im_servers", im, false);
-        writeServerYaml(c, all, "all_servers", Location.toAddresses(DnsManager.DNS_ADDRESS, all), true);
+        writeServerYaml(c, all, "dns_servers", dns);
+        writeServerYaml(c, all, "im_servers", im);
+        if (generateARecords) {
+            writeServerYaml(c, all, "all_servers", Location.toAddresses(DnsManager.DNS_ADDRESS, all));
+        }
     }
 
     /**
      * my-id : [ { :name: my-fqdn, :ipv4: 1.1.1.1 }, ... ]
      */
-    void writeServerYaml(YamlConfiguration c, List<Location> all, String id, List<Address> addresses, boolean rewrite)
+    void writeServerYaml(YamlConfiguration c, List<Location> all, String id, List<Address> addresses)
         throws IOException {
         c.startArray(id);
         if (addresses != null) {
             for (Address a : addresses) {
                 c.nextElement();
-                writeAddress(c, all, a.getAddress(), a.getPort(), rewrite);
+                writeAddress(c, all, a.getAddress(), a.getPort(), false);
             }
         }
         c.endArray();
@@ -173,6 +179,9 @@ public class DnsConfig implements ConfigProvider {
             c.write(":name", host);
             c.write(":ipv4", address);
             c.write(":port", port);
+            if (rewrite) {
+                c.write(":target", getHostname(all, address, false));
+            }
         }
     }
 
