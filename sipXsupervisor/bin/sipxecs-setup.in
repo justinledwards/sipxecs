@@ -537,9 +537,6 @@ set_root_keys()
 network_settings
 custom_hook
 role_settings = nil
-if !has_role?
-  choose_role
-end
 
 while true
   net = get_network
