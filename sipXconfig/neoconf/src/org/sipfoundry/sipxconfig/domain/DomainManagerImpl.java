@@ -222,4 +222,8 @@ public class DomainManagerImpl extends SipxHibernateDaoSupport<Domain> implement
     public void setConfiguredSipDomain(String configuredSipDomain) {
         m_configuredSipDomain = configuredSipDomain;
     }
+
+    public void setTestDomain(Domain d) {
+        m_domain = d;
+    }
 }
