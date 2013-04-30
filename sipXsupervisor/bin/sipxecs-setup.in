@@ -271,15 +271,23 @@ def cmd_no_die(cmd)
 end
 
 def network_settings
-  net = get_network
-  if net.valid?
-    puts "\e[0;31mNetwork settings:\e[m"
-    puts "IP address   : #{net.ip}"
-  end
-  change = prompt_confirm("Would you like to configure your system\'s \e[0;31m network settings\e[m?") unless $prompt[:noui]
-  if change
-    system("/usr/sbin/system-config-network-tui")
-    system("/etc/init.d/network reload")
+  change = false
+  while true
+    net = get_network(true)
+    if net.valid?
+      puts "\e[0;31mNetwork settings:\e[m"
+      puts "IP address   : #{net.ip}"
+      puts "Domain       : #{net.domain}"
+      puts "Host         : #{net.host}"
+    end
+    reprompt = prompt_confirm("Would you like to configure your system\'s \e[0;31m network settings\e[m?") unless $prompt[:noui]
+    if reprompt
+      change = true
+      system("/usr/sbin/system-config-network-tui")
+      system("/etc/init.d/network reload")
+    else
+      break
+    end
   end
   return change
 end
@@ -342,14 +350,18 @@ class Network
     # glean the results in such a way that if someone did change the host name using
     # that tool, we can tell what they entered.  The hostname.cf file will clean up the 
     # /etc/hosts file later.
+    File.open('/etc/resolv.conf', 'r') {|f|
+      while (line = f.gets)
+        if line =~ /^search\s*(.*?)$/
+          @domain = $1.gsub(/\s+/,'')
+        end
+      end
+    }
+
     File.open('/etc/sysconfig/network', 'r') {|f|
       while (line = f.gets)
-        case line
-        when /^HOSTNAME=["']?(.*?)["']?$/
-          segments = $1.split('.')
-          @host = segments[0]
-          @domain = segments[1..-1].join('.')
-        else
+        if line =~ /^HOSTNAME=["']?(.*?)["']?$/
+          @host = $1.chomp(".#{@domain}")
         end
       end
     }
@@ -380,7 +392,7 @@ def print_role_settings
         when 'domain'
           settings[:domain] = f[1]
           puts "SIP Domain     : " + settings[:domain]  if is_primary?
-        when 'host'          
+        when 'host'
           settings[:host] = f[1]
           puts "Host           : " + settings[:host]  if is_primary?
         when 'address'
@@ -521,7 +533,14 @@ end
 
 while true
   role_settings = print_role_settings
-  if role_settings.nil? || change_role?
+  net = get_network
+  hostname_changed = false
+  if role_settings
+    if role_settings[:host] != net.host
+        hostname_changed = true
+    end
+  end
+  if role_settings.nil? || change_role? || hostname_changed
     choose_role
     next unless $prompt[:noui]
   end
