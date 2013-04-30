@@ -22,6 +22,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -152,9 +153,11 @@ public class DnsConfig implements ConfigProvider {
         c.endArray();
         writeServerYaml(c, all, "dns_servers", dns);
         writeServerYaml(c, all, "im_servers", im);
+        List<Address> dnsAddresses = new ArrayList<Address>();
         if (generateARecords) {
-            writeServerYaml(c, all, "all_servers", Location.toAddresses(DnsManager.DNS_ADDRESS, all));
+            dnsAddresses = Location.toAddresses(DnsManager.DNS_ADDRESS, all);
         }
+        writeServerYaml(c, all, "all_servers", dnsAddresses);
     }
 
     /**

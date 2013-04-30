@@ -74,7 +74,7 @@ _xmpp-client._tcp.conference.<%= domain %>.     IN   SRV   10  10  5222  <%= ser
   end
 
 %><%= record_id('a') %><%
-  unless all_servers.nil?
+  if all_servers
     all_servers.each { |server| 
 %><%= server[:name] %>.           IN      A       <%= server[:ipv4] %>
 <%  }
