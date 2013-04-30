@@ -159,7 +159,7 @@ def prompt_required(msg, prompt_parameter)
 end
 
 # PRIMARY ONLY
-def set_domain
+def set_sip_domain
   net = get_network
   puts <<EOF
 \e[0;31mTip:\e[m Use '\e[0;31m#{net.host}.#{net.domain}\e[m' as your SIP domain if you are 
@@ -274,12 +274,8 @@ def network_settings
   change = false
   while true
     net = get_network(true)
-    if net.valid?
-      puts "\e[0;31mNetwork settings:\e[m"
-      puts "IP address   : #{net.ip}"
-      puts "Domain       : #{net.domain}"
-      puts "Host         : #{net.host}"
-    end
+    puts "\e[0;31mNetwork settings:\e[m"
+    puts "IP address   : #{net.ip}"
     reprompt = prompt_confirm("Would you like to configure your system\'s \e[0;31m network settings\e[m?") unless $prompt[:noui]
     if reprompt
       change = true
@@ -358,6 +354,10 @@ class Network
       end
     }
 
+    unless @domain
+      @domain = `hostname -d`.chomp
+    end
+
     File.open('/etc/sysconfig/network', 'r') {|f|
       while (line = f.gets)
         if line =~ /^HOSTNAME=["']?(.*?)["']?$/
@@ -383,7 +383,13 @@ def print_role_settings
   settings[:location] = get_location_id
   return nil if settings[:location].empty?
   puts "Location ID    : #{settings[:location]}" if is_secondary?
-  [$domain_dat, $master_dat, "#{$cfdatadir}/#{settings[:location]}/host.cfdat"].each {|fname|
+  files = [ 
+    "#{$cfdatadir}/#{settings[:location]}/host.cfdat",
+    $domain_dat,
+    $master_dat, 
+    "#{$cfdatadir}/network.cfdat", 
+  ]
+  files.each {|fname|
     next unless File.exists?(fname)
     File.open(fname, "r") {|fstream|
       while (line = fstream.gets)
@@ -392,6 +398,9 @@ def print_role_settings
         when 'domain'
           settings[:domain] = f[1]
           puts "SIP Domain     : " + settings[:domain]  if is_primary?
+        when 'net_domain'
+          settings[:net_domain] = f[1]
+          puts "Network Domain : " + settings[:net_domain]  if is_primary?
         when 'host'
           settings[:host] = f[1]
           puts "Host           : " + settings[:host]  if is_primary?
@@ -424,8 +433,8 @@ def choose_role
   choose_primary_role?
   if is_primary?
     set_nonroot_keys()
-    set_domain
     set_primary_hostname
+    set_sip_domain
   else
     set_secondary_role
   end
