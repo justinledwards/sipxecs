@@ -337,7 +337,6 @@ inline void StateQueueMessage::setType(Type type)
   assert(type < NumType);
   _type = type;
   
-  assert(_pObject);
   std::string newType;
   switch(type)
   {
@@ -413,8 +412,12 @@ inline void StateQueueMessage::setType(Type type)
       newType = "unknown";
       break;
   }
-  cJSON_DeleteItemFromObject(_pObject, "message-type");
-  cJSON_AddItemToObject(_pObject,"message-type", cJSON_CreateString(newType.c_str()));
+
+  if (_pObject)
+  {
+    cJSON_DeleteItemFromObject(_pObject, "message-type");
+    cJSON_AddItemToObject(_pObject,"message-type", cJSON_CreateString(newType.c_str()));
+  }
 }
 
 inline int StateQueueMessage::getServiceType() const
@@ -482,7 +485,9 @@ inline void StateQueueMessage::setServiceType(int serviceType)
 
 inline bool StateQueueMessage::get(const char* name, std::string& value) const
 {
-  assert(_pObject);
+  if (!_pObject)
+    return false;
+
   cJSON *stype = cJSON_GetObjectItem(_pObject,name);
 
   if (stype && stype->type == cJSON_String && stype->valuestring)
@@ -495,7 +500,9 @@ inline bool StateQueueMessage::get(const char* name, std::string& value) const
 
 inline bool StateQueueMessage::get(const char* name, double& value) const
 {
-  assert(_pObject);
+  if (!_pObject)
+    return false;
+
   cJSON *itype = cJSON_GetObjectItem(_pObject,name);
 
   if (itype && itype->type == cJSON_Number)
@@ -508,7 +515,9 @@ inline bool StateQueueMessage::get(const char* name, double& value) const
 
 inline bool StateQueueMessage::get(const char* name, int& value) const
 {
-  assert(_pObject);
+  if (!_pObject)
+    return false;
+
   cJSON *itype = cJSON_GetObjectItem(_pObject,name);
 
   if (itype && itype->type == cJSON_Number)
@@ -521,7 +530,9 @@ inline bool StateQueueMessage::get(const char* name, int& value) const
 
 inline bool StateQueueMessage::get(const char* name, bool& value)
 {
-  assert(_pObject);
+  if (!_pObject)
+    return false;
+
   cJSON *itype = cJSON_GetObjectItem(_pObject,name);
 
   if (itype && itype->type == cJSON_True)
@@ -539,37 +550,47 @@ inline bool StateQueueMessage::get(const char* name, bool& value)
 
 inline void StateQueueMessage::set(const char* name, const std::string& value)
 {
-  assert(_pObject);
-  cJSON_DeleteItemFromObject(_pObject, name);
-  cJSON_AddItemToObject(_pObject, name, cJSON_CreateString(value.c_str()));
+  if (_pObject)
+  {
+    cJSON_DeleteItemFromObject(_pObject, name);
+    cJSON_AddItemToObject(_pObject, name, cJSON_CreateString(value.c_str()));
+  }
 }
 
 inline void StateQueueMessage::set(const char* name, const char* value)
 {
-  assert(_pObject);
-  cJSON_DeleteItemFromObject(_pObject, name);
-  cJSON_AddItemToObject(_pObject, name, cJSON_CreateString(value));
+  if (_pObject)
+  {
+    cJSON_DeleteItemFromObject(_pObject, name);
+    cJSON_AddItemToObject(_pObject, name, cJSON_CreateString(value));
+  }
 }
 
 inline void StateQueueMessage::set(const char* name, int value)
 {
-  assert(_pObject);
-  cJSON_DeleteItemFromObject(_pObject, name);
-  cJSON_AddNumberToObject(_pObject, name, value);
+  if (_pObject)
+  {
+    cJSON_DeleteItemFromObject(_pObject, name);
+    cJSON_AddNumberToObject(_pObject, name, value);
+  }
 }
 
 inline void StateQueueMessage::set(const char* name, double value)
 {
-  assert(_pObject);
-  cJSON_DeleteItemFromObject(_pObject, name);
-  cJSON_AddNumberToObject(_pObject, name, value);
+  if (_pObject)
+  {
+    cJSON_DeleteItemFromObject(_pObject, name);
+    cJSON_AddNumberToObject(_pObject, name, value);
+  }
 }
 
 inline void StateQueueMessage::set(const char* name, bool value)
 {
-  assert(_pObject);
-  cJSON_DeleteItemFromObject(_pObject, name);
-  cJSON_AddItemToObject(_pObject, name, value ? cJSON_CreateTrue() : cJSON_CreateFalse());
+  if (_pObject)
+  {
+    cJSON_DeleteItemFromObject(_pObject, name);
+    cJSON_AddItemToObject(_pObject, name, value ? cJSON_CreateTrue() : cJSON_CreateFalse());
+  }
 }
 
 inline cJSON* StateQueueMessage::object()
