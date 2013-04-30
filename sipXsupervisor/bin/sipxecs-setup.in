@@ -354,17 +354,18 @@ class Network
       end
     }
 
-    unless @domain
-      @domain = `hostname -d`.chomp
-    end
-
-    File.open('/etc/sysconfig/network', 'r') {|f|
-      while (line = f.gets)
-        if line =~ /^HOSTNAME=["']?(.*?)["']?$/
-          @host = $1.chomp(".#{@domain}")
+    if @domain
+      File.open('/etc/sysconfig/network', 'r') {|f|
+        while (line = f.gets)
+          if line =~ /^HOSTNAME=["']?(.*?)["']?$/
+            @host = $1.chomp(".#{@domain}")
+          end
         end
-      end
-    }
+      }
+    else
+      @domain = `hostname -d`.chomp
+      @domain = `hostname -s`.chomp
+    end
   end
 
   def valid?
@@ -541,16 +542,10 @@ if !has_role?
 end
 
 while true
-  role_settings = print_role_settings
   net = get_network
-  hostname_changed = false
-  if role_settings
-    if role_settings[:host] != net.host
-        hostname_changed = true
-    end
-  end
-  if role_settings.nil? || change_role? || hostname_changed
-    choose_role
+  choose_role
+  role_settings = print_role_settings
+  if change_role?
     next unless $prompt[:noui]
   end
   break
