@@ -80,7 +80,7 @@ void StateQueueAgent::onRedisWatcherEvent(const std::vector<std::string>& event)
       StateQueueRecord rec;
       rec.id = REDIS_CHANNEL;
       rec.data = event[2];
-      publish(rec, false, false);
+      publish(rec, false);
     }
   }
 }
@@ -184,10 +184,8 @@ void StateQueueAgent::onDestroyConnection(StateQueueConnection::Ptr conn)
             << " Publish record: "
             << " record.id: " << record.id
             << " record.data: " << record.data);
-    publish(record, conn->isExternalConnection(), true);
+    publish(record, true);
   }
-
-  _listener.destroyConnection(conn);
 }
 
 void StateQueueAgent::onIncomingRequest(StateQueueConnection& conn, const char* bytes, std::size_t bytes_transferred)
@@ -232,7 +230,7 @@ void StateQueueAgent::onIncomingRequest(StateQueueConnection& conn, const char* 
               << " Publish record: "
               << " record.id: " << record.id
               << " record.data: " << record.data);
-      publish(record, conn.isExternalConnection(), true);
+      publish(record, true);
 
       //
       // Mark it as published
@@ -351,7 +349,7 @@ void StateQueueAgent::handlePing(StateQueueConnection& conn, StateQueueMessage& 
           << " Publish record: "
           << " record.id: " << record.id
           << " record.data: " << record.data);
-    publish(record, conn.isExternalConnection(), true);
+    publish(record, true);
 
     StateQueueMessage response;
     response.setType(StateQueueMessage::Pong);
@@ -419,7 +417,7 @@ void StateQueueAgent::handleEnqueueAndPublish(StateQueueConnection& conn, StateQ
 
 
     fillWatcherEventRecord(record, id, data, expires);
-    publish(record, conn.isExternalConnection(), noExternalPublish);
+    publish(record, noExternalPublish);
 
   StateQueueMessage response;
   response.setType(message.getType());
@@ -506,7 +504,7 @@ void StateQueueAgent::handlePublish(StateQueueConnection& conn, StateQueueMessag
   StateQueueRecord record;
   fillWatcherEventRecord(record, id, data);
 
-  publish(record, conn.isExternalConnection(), noExternalPublish);
+  publish(record, noExternalPublish);
 
   bool noresponse = false;
   if (message.get("noresponse", noresponse) && noresponse)
@@ -579,7 +577,7 @@ void StateQueueAgent::handlePublishAndPersist(StateQueueConnection& conn, StateQ
 
   set(dataId, workspace, record, expires);
 
-  publish(record, conn.isExternalConnection(), noExternalPublish);
+  publish(record, noExternalPublish);
 
   StateQueueMessage response;
   response.setType(message.getType());
@@ -588,7 +586,7 @@ void StateQueueAgent::handlePublishAndPersist(StateQueueConnection& conn, StateQ
 }
 
 
-void StateQueueAgent::publish(StateQueueRecord& record,  bool isExternalConnection, bool noExternalPublish)
+void StateQueueAgent::publish(StateQueueRecord& record,  bool noExternalPublish)
 {
   //
   // persist the new record and tell everyne about it.
@@ -606,9 +604,7 @@ void StateQueueAgent::publish(StateQueueRecord& record,  bool isExternalConnecti
 
   _publisher.publish(record);
 
-  if (!isExternalConnection // publish only records from internal publishers
-          && !noExternalPublish // publish only if it is allowed by the creator of this record
-          )
+  if (!noExternalPublish) // publish only if it is allowed by the creator of this record
   {
       OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::publish "
               "will publish to externals");
@@ -1145,14 +1141,6 @@ void StateQueueAgent::handleSignin(StateQueueConnection& conn, StateQueueMessage
     return;
   }
 
-  bool externalService = false;
-  if (message.get("external-service", externalService) && externalService)
-  {
-      OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handleSignin"
-              " external signin received.");
-      conn.markExternalConnection();
-  }
-
   if (SQAUtil::getServiceTypeStr(SQAUtil::ServiceWorker) == serviceType)
     _publisher.addSubscriber(subscriptionEvent, appId, subscriptionExpires);
 
@@ -1163,8 +1151,7 @@ void StateQueueAgent::handleSignin(StateQueueConnection& conn, StateQueueMessage
           << " message-app-id: " << appId
           << " subscription-event: " << subscriptionEvent
           << " service-type: " << serviceType
-          << " subscriptionExpires: " << subscriptionExpires
-          << " external-service: " << externalService);
+          << " subscriptionExpires: " << subscriptionExpires);
 
   sendOkResponse(message.getType(), conn, id, _publisherAddress);
 
@@ -1177,7 +1164,7 @@ void StateQueueAgent::handleSignin(StateQueueConnection& conn, StateQueueMessage
           << "Publish record: "
           << " record.id: " << record.id
           << " record.data: " << record.data);
-  publish(record, conn.isExternalConnection(), noExternalPublish);
+  publish(record, noExternalPublish);
 
 }
 
@@ -1219,7 +1206,7 @@ void StateQueueAgent::handleLogout(StateQueueConnection& conn, StateQueueMessage
           << " Publish record: "
           << " record.id: " << record.id
           << " record.data: " << record.data);
-  publish(record, conn.isExternalConnection(), noExternalPublish);
+  publish(record, noExternalPublish);
 }
 
 void StateQueueAgent::fillConnectionEventRecord(

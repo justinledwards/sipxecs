@@ -355,7 +355,6 @@ class StateQueueClient : public boost::enable_shared_from_this<StateQueueClient>
 
       unsigned long getNextReadSize()
       {
-        short version = 1;
         bool hasVersion = false;
         bool hasKey = false;
         unsigned long remoteLen = 0;
