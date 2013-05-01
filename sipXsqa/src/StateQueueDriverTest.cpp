@@ -631,11 +631,42 @@ bool StateQueueDriverTest::runTests()
   DEFINE_RESOURCE(TestDriver, "state_agent", &_agent);
   DEFINE_RESOURCE(TestDriver, "argc", _argc);
   DEFINE_RESOURCE(TestDriver, "argv", _argv);
-  DEFINE_RESOURCE(TestDriver, "simple_pop_client", new StateQueueClient(SQAUtil::ServiceWorker, "StateQueueDriverTest", address, port, "reg", 2));
-  DEFINE_RESOURCE(TestDriver, "simple_publisher", new StateQueueClient(SQAUtil::ServicePublisher, "StateQueueDriverTest", address, port, "reg", 2));
+//  DEFINE_RESOURCE(TestDriver, "simple_pop_client", new StateQueueClient(SQAUtil::ServiceWorker, "StateQueueDriverTest", address, port, "reg", 2));
+//  DEFINE_RESOURCE(TestDriver, "simple_publisher", new StateQueueClient(SQAUtil::ServicePublisher, "StateQueueDriverTest", address, port, "reg", 2));
+
 
   boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
   
+  boost::thread* _pIoServiceThread;
+  boost::asio::io_service _ioService;
+  _pIoServiceThread = new boost::thread(boost::bind(&boost::asio::io_service::run, &_ioService));
+  StateQueueClient::SQAClientCore::BlockingTcpClient* pClient= new StateQueueClient::SQAClientCore::BlockingTcpClient(_ioService, 100, 100, SQA_KEY_ALPHA);
+  pClient->connect(address, port);
+
+  StateQueueMessage ping;
+  StateQueueMessage pong;
+  ping.setType(StateQueueMessage::Ping);
+  std::string _applicationId = "lol";
+  ping.set("message-app-id", _applicationId.c_str());
+
+  if (!pClient->isConnected() && !pClient->connect(address, port))
+  {
+    OS_LOG_DEBUG(FAC_NET, "Client is not connected to  " << address << ":" << port);
+    return false;
+  }
+
+  bool sent = pClient->receive(pong);
+   sent = pClient->sendAndReceive(ping, pong);
+  if (sent)
+  {
+    if (pong.getType() == StateQueueMessage::Pong)
+    {
+      OS_LOG_DEBUG(FAC_NET, "Keep-alive response received from " << address << ":" << port);
+    }
+  }
+  return true;
+
+
   //
   // Run the unit tests
   //

@@ -44,6 +44,7 @@
 
 class StateQueueClient : public boost::enable_shared_from_this<StateQueueClient>, private boost::noncopyable
 {
+public:
   class SQAClientCore : public boost::enable_shared_from_this<SQAClientCore>, private boost::noncopyable
   {
   public:
