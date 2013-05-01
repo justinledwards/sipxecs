@@ -452,15 +452,15 @@ DEFINE_TEST(TestDriver, TestPublisherWatcherHA)
 {
   g_driver->generateSQAAgentData(2);
   SQAAgentData::Ptr agentData1 = g_driver->_agents[0];
-  SQAAgentData::Ptr agentData2 = g_driver->_agents[1];
+  //SQAAgentData::Ptr agentData2 = g_driver->_agents[1];
 
   g_driver->startSQAAgent(agentData1);
-  g_driver->startSQAAgent(agentData2);
+  //g_driver->startSQAAgent(agentData2);
 
   // prepare publisher to local and remote for events of type "reg"
   StateQueueClient publisher1(SQAUtil::ServicePublisher, "PublisherLocal", agentData1->sqaControlAddress, agentData1->sqaControlPort, "reg", 1);
   // prepare watchers to local and remote for events of type "reg"
-  StateQueueClient watcher2(SQAUtil::ServiceWatcher, "WatcherRemote", agentData2->sqaControlAddress, agentData2->sqaControlPort, "reg", 1);
+  //StateQueueClient watcher2(SQAUtil::ServiceWatcher, "WatcherRemote", agentData2->sqaControlAddress, agentData2->sqaControlPort, "reg", 1);
 
 
   boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
@@ -470,11 +470,11 @@ DEFINE_TEST(TestDriver, TestPublisherWatcherHA)
 
   // TEST: Regular no-response publish / watch should work
   ASSERT_COND(publisher1.publish("reg.1", "reg-data-1", true));
-  ASSERT_COND(watcher2.watch(eventId, eventData));
+  //ASSERT_COND(watcher2.watch(eventId, eventData));
   // TEST: External publish uses directly the eventId as messageId with no modifications
-  ASSERT_STR_STARTS_WITH(eventId, "sqw.reg.1");
+  //ASSERT_STR_STARTS_WITH(eventId, "sqw.reg.1");
   //TODO: Verify that the eventId has the proper format with sqw.eventId.hex4-hex4
-  ASSERT_STR_EQ(eventData, "reg-data-1");
+  //ASSERT_STR_EQ(eventData, "reg-data-1");
 }
 //***********************Publisher/Watcher HA Test*****************************************
 
@@ -655,9 +655,9 @@ bool StateQueueDriverTest::runTests()
 //    VERIFY_TEST(TestDriver, TestPublishRegularBehavior);
 //    VERIFY_TEST(TestDriver, TestPublishToExternalBehavior);
 
-    VERIFY_TEST(TestDriver, TestSQAUtil);
-    //VERIFY_TEST(TestDriver, TestPublisherWatcherHA);
-    VERIFY_TEST(TestDriver, TestDealerWorkerHA );
+    //VERIFY_TEST(TestDriver, TestSQAUtil);
+    VERIFY_TEST(TestDriver, TestPublisherWatcherHA);
+    //VERIFY_TEST(TestDriver, TestDealerWorkerHA );
 
   //
   // Delete simple_pop_client so it does not participate in popping events
