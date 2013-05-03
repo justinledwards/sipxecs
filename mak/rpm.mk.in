@@ -14,9 +14,8 @@ RPM_DIST = @RPM_DIST@
 CREATEREPO_OPTS_centos = @BACKWARD_COMPATIBLE_CREATEREPO_OPTS_FOR_CENTOS@
 CREATEREPO_COMPS = $(SRC)/mak/comps.xml
 CREATEREPO_OPTS = -g $(abspath $(CREATEREPO_COMPS)) $(CREATEREPO_OPTS_$(DISTRO_OS))
-RPM_DIST_DIR = @RPM_DIST_DIR@
-MOCK_RESULTS_DIR = $(RPM_DIST_DIR)/$(DISTRO_RESULTS_DIR)/$(DISTRO_ARCH)
-MOCK_SRPM_DIR = $(RPM_DIST_DIR)/$(DISTRO_RESULTS_DIR)/source
+MOCK_RESULTS_DIR = @RPM_DIST_DIR@/$(DISTRO_RESULTS_DIR)/$(DISTRO_ARCH)
+MOCK_SRPM_DIR = @RPM_DIST_DIR@/$(DISTRO_RESULTS_DIR)/source
 MOCK_OPTS = \
 	  --configdir=$(MOCK_CONFIG_DIR) \
 	  -r $(MOCK_TARGET_PLATFORM) \
@@ -112,6 +111,29 @@ $(lib:=.rpm) : %.rpm : $$(addsuffix .rpm,$$($$*_DEPS))
 	  $(MAKE) $(PROJ).srpm $(PROJ).rpm_; \
 	fi
 
+RPM_DEP = $(MOCK_RESULTS_DIR)/.dep.$(PROJ)
+$(lib:=.rpm-by-dep) : %.rpm-by-dep : $$(addsuffix .rpm-by-dep,$$($$*_DEPS))
+	@if test -f $(RPM_DEP); then \
+	  x=`find $(SRC)/$(PROJ) -type f \( \
+	       -newer $(RPM_DEP) \) -printf .`; \
+	  if [ -n "$$x" ] ; then \
+	    rm $(RPM_DEP); \
+	  fi; \
+	fi
+	@if [ -f $(RPM_DEP) -a -n "$($(PROJ)_DEPS)" ]; then \
+	  for f in $(addprefix $(MOCK_RESULTS_DIR)/.dep.,$($(PROJ)_DEPS)) ; do \
+	    if test -f $(RPM_DEP); then \
+	      if [ $$f -nt $(RPM_DEP) ]; then \
+	        rm $(RPM_DEP); \
+		  break; \
+	      fi \
+	    fi \
+	  done \
+	fi
+	@if ! test -f $(RPM_DEP); then \
+	  $(MAKE) $(PROJ).srpm $(PROJ).rpm_; \
+	fi
+
 # Only build rpm if underlying tarball changed. Do not rely on srpm because srpms are cheap to
 # create AND because if there is a new tarball, it will contain
 $(sipx:=.rpm) : %.rpm : $$(addsuffix .rpm,$$($$*_DEPS)) %.dist
@@ -173,9 +195,9 @@ repo-clean :
 repo-webserver :
 	-kill -15 $(firstword $(shell ps xo "%p %a" | grep -v grep | egrep 'thttpd -d repo -p @REPO_PORT@'))
 	find $(MOCK_RESULTS_DIR) -type f -not -path '*/.dep.*' -exec touch {} \;
-	/usr/sbin/thttpd -d $(RPM_DIST_DIR) -p @REPO_PORT@ -M 0
+	/usr/sbin/thttpd -d @RPM_DIST_DIR@ -p @REPO_PORT@ -M 0
 
-help.repo-src = Assemble source rpms into $(RPM_DIST_DIR)/$(DISTRO_RESULTS_DIR)/source
+help.repo-src = Assemble source rpms into @RPM_DIST_DIR@/$(DISTRO_RESULTS_DIR)/source
 repo-src : repo-comps
 	for f in $(shell $(SRC)/mak/list-obsolete-rpms $(MOCK_SRPM_DIR)); do rm $$f; done
 	cd $(MOCK_SRPM_DIR); createrepo $(CREATEREPO_OPTS) .

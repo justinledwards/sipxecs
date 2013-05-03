@@ -17,7 +17,11 @@
 package org.sipfoundry.sipxconfig.vm;
 
 import java.util.Date;
+import java.util.TimeZone;
 
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
+import org.joda.time.LocalDateTime;
 import org.w3c.dom.Element;
 
 public class RemoteVoicemail implements Voicemail, Comparable {
@@ -35,16 +39,23 @@ public class RemoteVoicemail implements Voicemail, Comparable {
     private boolean m_forwarded;
     private String m_forwardedSubject;
 
-    public RemoteVoicemail(Element node, String userId, String folder) {
+    public RemoteVoicemail(Element node, String userId, String folder, TimeZone tz) {
         m_userId = userId;
         m_folderId = folder;
         m_messageId = node.getAttribute("id");
         m_heard = Boolean.valueOf(node.getAttribute("heard"));
         m_durationSecs = Integer.valueOf(node.getAttribute("duration"));
-        m_timestamp = new Date(new Long(node.getAttribute("received")));
+        m_timestamp = convertJodaTimezone(new LocalDateTime(new Long(node.getAttribute("received"))), DateTimeZone
+                .getDefault().getID(), tz.getID());
         m_from = node.getAttribute("fromUri");
         m_fromBrief = node.getAttribute("author");
         m_subject = node.getAttribute("subject");
+    }
+
+    public static Date convertJodaTimezone(LocalDateTime date, String srcTz, String destTz) {
+        DateTime srcDateTime = date.toDateTime(DateTimeZone.forID(srcTz));
+        DateTime dstDateTime = srcDateTime.withZone(DateTimeZone.forID(destTz));
+        return dstDateTime.toLocalDateTime().toDateTime().toDate();
     }
 
     public int compareTo(Object o) {

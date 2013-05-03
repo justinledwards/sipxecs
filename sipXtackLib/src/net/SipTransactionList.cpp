@@ -105,12 +105,8 @@ SipTransactionList::findTransactionFor(const SipMessage& message,
     // Call garbage collection before we further process existence of a transaction.
     //
     {
-    boost::mutex::scoped_lock lock(_garbageCollectionMutex, boost::try_to_lock);
-    if (lock)
-    {
-      mpSipUserAgent->garbageCollection();
-    }
-    //else { // some other thread is already doing garbageCollection, no need to wait here}
+    boost::lock_guard<boost::mutex> lock(_garbageCollectionMutex);
+    mpSipUserAgent->garbageCollection();
     }
 
     lock();

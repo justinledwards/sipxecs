@@ -34,6 +34,7 @@ import org.sipfoundry.sipxconfig.proxy.ProxyManager;
 import org.sipfoundry.sipxconfig.setting.Group;
 import org.sipfoundry.sipxconfig.setting.SettingDao;
 import org.sipfoundry.sipxconfig.test.TestHelper;
+import org.sipfoundry.sipxconfig.vm.AbstractMailboxManager;
 import org.sipfoundry.sipxconfig.vm.DistributionList;
 import org.sipfoundry.sipxconfig.vm.MailboxManager;
 import org.sipfoundry.sipxconfig.vm.MailboxPreferences;

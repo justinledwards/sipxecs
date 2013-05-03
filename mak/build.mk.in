@@ -35,8 +35,12 @@ $(eval sipx_include = $(shell test -f .modules-include && \
 $(eval sipx_exclude = $(shell test -f .modules-exclude && \
 	cat .modules-exclude))
 
-sipx := $(filter-out $(sipx_exclude) $(lib),$(sipx_include))
-lib := $(filter-out $(sipx_exclude) $(sipx),$(lib) $(sipx_include))
+sipx := $(sort $(filter-out $(sipx_exclude) $(lib),$(sipx_include)))
+lib := $(sort $(filter-out $(sipx_exclude) $(sipx),$(lib) $(sipx_include)))
+
+help.sipx=Build all sipx components including targets autoreconf, configure, all and install targets
+build sipx :
+	$(MAKE) $(foreach P,$(sipx),$(P))
 
 # Only the main rpm
 $(foreach P,$(sipx),$(eval $(P)_TAR = $(P)/$$(call lowercase,$(P))-$(PACKAGE_VERSION).tar.gz))
@@ -58,10 +62,6 @@ DEFAULT_ON_CHANGE = \
 	-a -not -name '*~' \
 	-a -not -name config.h.in
 build_on_change_undefined = $(DEFAULT_ON_CHANGE)
-
-help.sipx=Build all sipx components including targets autoreconf, configure, all and install targets
-build sipx :
-	$(MAKE) $(foreach P,$(sipx),$(P))
 
 $(foreach P,$(git_custommodules),$(SRC)/$(P)/.git) : $(SRC)/%/.git :
 	cd $(SRC)/custom; \
@@ -123,11 +123,6 @@ help.{sipx}.autoreconf=Run autoreconf on each project
 %.autoreconf : $$($$*_GIT_SUBMODULE)
 	cd $(SRC)/$(PROJ); \
 	  autoreconf -if
-
-# TODO: Needs to support switching branches automatically
-$(foreach P,$(all),$(SRC)/$(P)) : $(SRC)/% :
-	git clone $($*_REPO) $*.git
-	mv $*.git $@
 
 help.{sipx}.configure = Run configure on each project
 %.configure :

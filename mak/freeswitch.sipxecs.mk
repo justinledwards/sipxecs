@@ -22,7 +22,7 @@ freeswitch_SOURCES = $(freeswitch_TARBALL) \
 freeswitch_SRPM_DEFS = --define "buildno $(freeswitch_PACKAGE_REVISION)"
 freeswitch_RPM_DEFS = --define="buildno $(freeswitch_PACKAGE_REVISION)"
 
-freeswitch.dist : $(SRC)/freeswitch/.git
+freeswitch.dist : $(freeswitch_GIT_SUBMODULE)
 	test -d $(dir $(freeswitch_TARBALL)) || mkdir -p $(dir $(freeswitch_TARBALL))
 	cd $(SRC)/$(PROJ); \
 	  git archive --format tar --prefix freeswitch-$(freeswitch_VER)/ HEAD | bzip2 > $(freeswitch_TARBALL)
