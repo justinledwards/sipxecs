@@ -145,6 +145,10 @@ help.{sipx}.dist-changes = List changes since last tarball was built.
 $(sipx:=.dist-changes) :
 	@! test -f $($(PROJ)_TAR) || $(call build_on_change,$($(PROJ)_TAR))
 
+help.{sipx}.dist-clean = Delete tarball.
+$(sipx:=.dist-clean) :
+	@! test -f $($(PROJ)_TAR) || rm $($(PROJ)_TAR)
+
 # This first checks if any files have changed in a project, if not, then 
 # checks if any dependent projects were build since this project was
 # build. If so clear the build file
