@@ -13,6 +13,7 @@ Source0:	%{upstream}-%{realname}-%{version}-g%{gitref}.tar.gz
 Patch1:		erlang-mimetypes-0001-Replace-git-vsn-with-fixed-value.patch
 BuildRoot:	%(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 BuildRequires:	erlang-rebar
+BuildRequires:  erlang-parsetools
 Requires:	erlang-erts >= R14B
 Requires:	erlang-kernel >= R14B
 Requires:	erlang-stdlib >= R14B
