@@ -11,6 +11,7 @@ package org.sipfoundry.sipxconfig.common;
 import static org.sipfoundry.commons.mongo.MongoConstants.CONTACT;
 import static org.sipfoundry.commons.mongo.MongoConstants.GROUPS;
 import static org.sipfoundry.commons.mongo.MongoConstants.TIMESTAMP;
+import static org.sipfoundry.commons.mongo.MongoConstants.TIMEZONE;
 import static org.sipfoundry.commons.mongo.MongoConstants.UID;
 
 import java.util.ArrayList;
@@ -145,7 +146,7 @@ public class User extends AbstractUser implements Replicable {
         props.put(UID, getUserName());
         props.put(CONTACT, getContactUri(domain));
         props.put(GROUPS, getGroupsNames().split(" "));
-        // props.put(TIMEZONE, getTimezone());
+        props.put(TIMEZONE, getTimezone().getID());
         props.put(TIMESTAMP, System.currentTimeMillis());
         return props;
     }
@@ -165,7 +166,8 @@ public class User extends AbstractUser implements Replicable {
     }
 
     public TimeZone getTimezone() {
-        if (getUserBranch() != null && (Boolean) getSettingTypedValue("timezone/useBranchTimezone")) {
+        if (getUserBranch() != null && (Boolean) getSettingTypedValue("timezone/useBranchTimezone")
+                && getUserBranch().getTimeZone() != null) {
             return TimeZone.getTimeZone((getUserBranch().getTimeZone()));
         }
 
