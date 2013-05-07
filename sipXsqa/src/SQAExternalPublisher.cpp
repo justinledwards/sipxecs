@@ -78,6 +78,11 @@ bool SQAExternalPublisher::start()
         }
     }
 
+    OS_LOG_DEBUG(FAC_NET, "SQAExternalPublisher::start"
+        << " [" << this << "]"
+        << " myControlAddress: " << mySqaControlAddress << ":" << mySqaControlPort << ";"
+        << " allControlAddresses: " << sqaControlAddressAll << ":" << sqaControlPortAll);
+
     std::vector<std::string> addresses;
     std::vector<std::string> ports;
     if (true == ret)
@@ -104,9 +109,15 @@ bool SQAExternalPublisher::start()
                 // no need to create a publisher to our own agent address
                 continue;
             }
+            if (addresses[i].empty() || ports[i].empty())
+            {
+              OS_LOG_NOTICE(FAC_NET, "SQAExternalPublisher::start this: " << this <<
+                  " Empty address: " << addresses[i] << ":" << ports[i]);
+                continue;
+            }
 
             std::ostringstream ss;
-            ss << "SQAPublisherExternal-" << mySqaControlAddress << ":" << mySqaControlPort;
+            ss << "SQAPublisherExternal-" << mySqaControlAddress << ":" << mySqaControlPort << "-to-" << addresses[i] << ":" << ports[i];
 
             SQAPublisher* publisher = new SQAPublisher(ss.str().c_str(), addresses[i].c_str(), ports[i].c_str(), true, 1, 100, 100);
             OS_LOG_AND_ASSERT(publisher, FAC_NET, "SQAExternalPublisher::start"

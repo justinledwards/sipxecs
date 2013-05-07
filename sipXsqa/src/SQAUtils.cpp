@@ -116,7 +116,7 @@ bool SQAUtil::validateId(const std::string &id, int serviceType, const std::stri
     std::vector<std::string> parts;
     boost::algorithm::split(parts, id, boost::is_any_of("."), boost::token_compress_on);
 
-    if (3 != parts.size())
+    if (3 > parts.size())
         return false;
 
     if (parts[0] == DealerWorkerPrefix)
@@ -143,7 +143,7 @@ bool SQAUtil::validateId(const std::string &id, int serviceType, const std::stri
         return false;
     }
 
-    std::string hextokens = parts[2];
+    std::string hextokens = parts[parts.size() - 1];
     parts.clear();
 
     boost::algorithm::split(parts, hextokens, boost::is_any_of("-"), boost::token_compress_on);

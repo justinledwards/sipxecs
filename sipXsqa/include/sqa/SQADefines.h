@@ -27,6 +27,13 @@ enum ConnectionEvent
     ConnectionEventNum,
 };
 
+enum SQAOpState
+{
+  SQAOpNotDone,
+  SQAOpOK,
+  SQAOpFailed,
+};
+
 #define PublisherWatcherPrefix "sqw"
 #define DealerWorkerPrefix "sqa"
 #define UnknownPrefix "unk"

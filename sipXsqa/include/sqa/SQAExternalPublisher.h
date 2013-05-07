@@ -144,9 +144,6 @@ inline void SQAExternalPublisher::run()
         StateQueueRecord record;
         if (dequeue(record))
         {
-            OS_LOG_DEBUG(FAC_NET, "SQAExternalPublisher::run"
-                << " [" << this << "]"
-                << " external publish for record: id:" << record.id << " data:" << record.data);
             external_publish(record);
         }
     }
@@ -162,7 +159,7 @@ inline void SQAExternalPublisher::external_publish(StateQueueRecord& record)
 
         OS_LOG_DEBUG(FAC_NET, "SQAExternalPublisher::external_publish"
             << " [" << this << "]"
-            << " publish result: " << ret );
+            << " publish " << ((ret) ? "SUCCEEDED" : "FAILED"));
     }
 }
 
@@ -181,9 +178,6 @@ inline bool SQAExternalPublisher::dequeue(StateQueueRecord& record)
     record = _queue.front();
     _queue.pop();
 
-    OS_LOG_DEBUG(FAC_NET, "SQAExternalPublisher::dequeue this: "
-        << " [" << this << "]"
-        << " dequeued record: id:" << record.id << " data:" << record.data);
     return true;
 }
 

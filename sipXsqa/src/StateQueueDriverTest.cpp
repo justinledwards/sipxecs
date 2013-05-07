@@ -448,6 +448,7 @@ DEFINE_TEST(TestDriver, TestPublishToExternalBehavior)
 //***********************Publisher Tests*****************************************
 
 //***********************Publisher/Watcher HA Test*****************************************
+#if 0
 DEFINE_TEST(TestDriver, TestPublisherWatcherHA)
 {
   g_driver->generateSQAAgentData(2);
@@ -476,9 +477,11 @@ DEFINE_TEST(TestDriver, TestPublisherWatcherHA)
   //TODO: Verify that the eventId has the proper format with sqw.eventId.hex4-hex4
   //ASSERT_STR_EQ(eventData, "reg-data-1");
 }
+#endif
 //***********************Publisher/Watcher HA Test*****************************************
 
 //***********************Dealer/Worker HA Test*********************************************
+#if 0
 DEFINE_TEST(TestDriver, TestDealerWorkerHA)
 {
   g_driver->generateSQAAgentData(2);
@@ -507,6 +510,7 @@ DEFINE_TEST(TestDriver, TestDealerWorkerHA)
   //TODO: Verify that the eventId has the proper format with sqw.eventId.hex4-hex4
   ASSERT_STR_EQ(workData, "reg-data-1");
 }
+#endif
 //***********************Dealer/Worker HA Test*********************************************
 
 //***********************SQAUtil Test*********************************************
@@ -514,6 +518,7 @@ DEFINE_TEST(TestDriver, TestSQAUtil)
 {
   ASSERT_COND(!SQAUtil::isPublisher(SQAUtil::ServiceUnknown));
   ASSERT_COND(SQAUtil::isPublisher(SQAUtil::ServicePublisher));
+  ASSERT_COND(SQAUtil::isPublisher(SQAUtil::ServicePublisher | SQAUtil::ServiceSpecExternal));
   ASSERT_COND(SQAUtil::isPublisher(SQAUtil::ServiceDealer));
   ASSERT_COND(!SQAUtil::isPublisher(SQAUtil::ServiceWatcher));
   ASSERT_COND(!SQAUtil::isPublisher(SQAUtil::ServiceWorker));
@@ -521,6 +526,7 @@ DEFINE_TEST(TestDriver, TestSQAUtil)
 
   ASSERT_COND(!SQAUtil::isPublisherOnly(SQAUtil::ServiceUnknown));
   ASSERT_COND(SQAUtil::isPublisherOnly(SQAUtil::ServicePublisher));
+  ASSERT_COND(SQAUtil::isPublisherOnly(SQAUtil::ServicePublisher | SQAUtil::ServiceSpecExternal));
   ASSERT_COND(!SQAUtil::isPublisherOnly(SQAUtil::ServiceDealer));
   ASSERT_COND(!SQAUtil::isPublisherOnly(SQAUtil::ServiceWatcher));
   ASSERT_COND(!SQAUtil::isPublisherOnly(SQAUtil::ServiceWorker));
@@ -631,40 +637,39 @@ bool StateQueueDriverTest::runTests()
   DEFINE_RESOURCE(TestDriver, "state_agent", &_agent);
   DEFINE_RESOURCE(TestDriver, "argc", _argc);
   DEFINE_RESOURCE(TestDriver, "argv", _argv);
-//  DEFINE_RESOURCE(TestDriver, "simple_pop_client", new StateQueueClient(SQAUtil::ServiceWorker, "StateQueueDriverTest", address, port, "reg", 2));
-//  DEFINE_RESOURCE(TestDriver, "simple_publisher", new StateQueueClient(SQAUtil::ServicePublisher, "StateQueueDriverTest", address, port, "reg", 2));
+  DEFINE_RESOURCE(TestDriver, "simple_pop_client", new StateQueueClient(SQAUtil::ServiceWorker, "StateQueueDriverTest", address, port, "reg", 2));
+  DEFINE_RESOURCE(TestDriver, "simple_publisher", new StateQueueClient(SQAUtil::ServicePublisher, "StateQueueDriverTest", address, port, "reg", 2));
 
 
   boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
-  
-  boost::thread* _pIoServiceThread;
-  boost::asio::io_service _ioService;
-  _pIoServiceThread = new boost::thread(boost::bind(&boost::asio::io_service::run, &_ioService));
-  StateQueueClient::SQAClientCore::BlockingTcpClient* pClient= new StateQueueClient::SQAClientCore::BlockingTcpClient(_ioService, 100, 100, SQA_KEY_ALPHA);
-  pClient->connect(address, port);
-
-  StateQueueMessage ping;
-  StateQueueMessage pong;
-  ping.setType(StateQueueMessage::Ping);
-  std::string _applicationId = "lol";
-  ping.set("message-app-id", _applicationId.c_str());
-
-  if (!pClient->isConnected() && !pClient->connect(address, port))
-  {
-    OS_LOG_DEBUG(FAC_NET, "Client is not connected to  " << address << ":" << port);
-    return false;
-  }
-
-  bool sent = pClient->receive(pong);
-   sent = pClient->sendAndReceive(ping, pong);
-  if (sent)
-  {
-    if (pong.getType() == StateQueueMessage::Pong)
-    {
-      OS_LOG_DEBUG(FAC_NET, "Keep-alive response received from " << address << ":" << port);
-    }
-  }
-  return true;
+//
+//  boost::thread* _pIoServiceThread;
+//  boost::asio::io_service _ioService;
+//  _pIoServiceThread = new boost::thread(boost::bind(&boost::asio::io_service::run, &_ioService));
+//  StateQueueClient::SQAClientCore::BlockingTcpClient* pClient= new StateQueueClient::SQAClientCore::BlockingTcpClient(_ioService, 100, 100, SQA_KEY_ALPHA);
+//  pClient->connect(address, port);
+//
+//  StateQueueMessage ping;
+//  StateQueueMessage pong;
+//  ping.setType(StateQueueMessage::Ping);
+//  std::string _applicationId = "lol";
+//  ping.set("message-app-id", _applicationId.c_str());
+//
+//  if (!pClient->isConnected() && !pClient->connect(address, port))
+//  {
+//    OS_LOG_DEBUG(FAC_NET, "Client is not connected to  " << address << ":" << port);
+//    return false;
+//  }
+//
+//  bool sent = pClient->sendAndReceive(ping, pong);
+//  if (sent)
+//  {
+//    if (pong.getType() == StateQueueMessage::Pong)
+//    {
+//      OS_LOG_DEBUG(FAC_NET, "Keep-alive response received from " << address << ":" << port);
+//    }
+//  }
+//  return true;
 
 
   //
@@ -687,7 +692,7 @@ bool StateQueueDriverTest::runTests()
 //    VERIFY_TEST(TestDriver, TestPublishToExternalBehavior);
 
     //VERIFY_TEST(TestDriver, TestSQAUtil);
-    VERIFY_TEST(TestDriver, TestPublisherWatcherHA);
+    //VERIFY_TEST(TestDriver, TestPublisherWatcherHA);
     //VERIFY_TEST(TestDriver, TestDealerWorkerHA );
 
   //
@@ -706,143 +711,4 @@ bool StateQueueDriverTest::runTests()
   boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
 
   return TEST_RESULT(TestDriver);
-}
-
-void StateQueueDriverTest::generateSQAConfig(SQAAgentData::Ptr data)
-{
-  std::ofstream ofs(data->configFilePath.data(), std::ios_base::trunc | std::ios_base::in);
-
-  ofs << "log-level=7" << "\n"
-      << "sqa-control-port=" << data->sqaControlPort << "\n"
-      << "zmq-subscription-port=" << data->sqaZmqSubscriptionPort << "\n"
-      << "sqa-control-address=" << data->sqaControlAddress << "\n"
-      << "zmq-subscription-address=" << data->sqaZmqSubscriptionAddress <<"\n"
-      << "sqa-control-port-all=" << data->sqaControlPortAll << "\n"
-      << "sqa-control-address-all=" << data->sqaControlAddressAll << "\n";
-}
-
-void StateQueueDriverTest::deleteFile(std::string& filePath)
-{
-  //TBD
-}
-
-void StateQueueDriverTest::startSQAAgent(SQAAgentData::Ptr agentData)
-{
-  const char *argv[5];
-  argv[0] = _argv[0];
-  argv[1] = "--config-file";
-  argv[2] = agentData->configFilePath.data();
-  argv[3] = "--log-file";
-  argv[4] = agentData->logFilePath.data();
-
-  int argc = 5;
-
-  ServiceOptions service(argc, (char**)argv, "StateQueueAgent", "1.0.0", "Copyright Ezuce Inc. (All Rights Reserved)");
-  service.addDaemonOptions();
-  service.addOptionString("zmq-subscription-address", ": Address where to subscribe for events.");
-  service.addOptionString("zmq-subscription-port", ": Port where to send subscription for events.");
-  service.addOptionString("sqa-control-port", ": Port where to send control commands.");
-  service.addOptionString("sqa-control-address", ": Address where to send control commands.");
-
-  if (!service.parseOptions() ||
-          !service.hasOption("zmq-subscription-address") ||
-          !service.hasOption("zmq-subscription-port") ||
-          !service.hasOption("sqa-control-port") ||
-          !service.hasOption("sqa-control-address") )
-  {
-    service.displayUsage(std::cerr);
-    return ;
-  }
-
-  pid_t pid = fork();
-  if (pid == 0)                // child
-  {
-  // Code only executed by child process
-    StateQueueAgent sqa(agentData->id, service);
-    sqa.run();
-
-    service.waitForTerminationRequest();
-    exit(1);
-  }
-  else if (pid < 0)            // failed to fork
-  {
-    exit(1);
-  }
-  else                                   // parent
-  {
-    agentData->pid = pid;
-    boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
-  }
-}
-
-void StateQueueDriverTest::stopSQAAgent(SQAAgentData::Ptr data)
-{
-
-  if (data->pid > 0)
-  {
-    kill(data->pid, SIGTERM);
-    boost::this_thread::sleep(boost::posix_time::milliseconds(100));
-    kill(data->pid, SIGTERM);
-  }
-}
-
-void StateQueueDriverTest::generateSQAAgentData(unsigned int agentsNum)
-{
-  std::string sqaControlAddressAll;
-  std::string sqaControlPortAll;
-
-  for (unsigned int i = 0; i < agentsNum; i++)
-  {
-    SQAAgentData::Ptr data = SQAAgentData::Ptr(new SQAAgentData());
-
-    {
-      std::stringstream strm;
-      strm << "Agent" << i;
-      data->id = strm.str();
-    }
-
-    {
-      std::stringstream strm;
-      strm << (g_defaultSqaControlPort + g_portIncrement * i);
-      data->sqaControlPort = strm.str();
-    }
-    {
-      std::stringstream strm;
-      strm << (g_defaultZmqSubscriptionPort + g_portIncrement * i);
-      data->sqaZmqSubscriptionPort = strm.str();
-    }
-
-    data->sqaControlAddress = "192.168.13.2";
-    data->sqaZmqSubscriptionAddress = "192.168.13.2";
-
-    {
-      std::stringstream strm;
-      strm << "sipxsqa-config-" << i;
-      data->configFilePath = strm.str();
-    }
-
-    {
-      std::stringstream strm;
-      strm << "sipxsqa.log-";// << i;
-      data->logFilePath = strm.str();
-    }
-
-    sqaControlAddressAll += data->sqaControlAddress + ",";
-    sqaControlPortAll += data->sqaControlPort + ",";
-
-    _agents.push_back(data);
-  }
-
-  std::vector<SQAAgentData::Ptr>::iterator it;
-  for (it = _agents.begin(); it != _agents.end(); it++)
-  {
-    SQAAgentData::Ptr data = *it;
-
-    data->sqaControlPortAll = sqaControlPortAll;
-    data->sqaControlAddressAll = sqaControlAddressAll;
-
-    generateSQAConfig(data);
-  }
-
-
 }

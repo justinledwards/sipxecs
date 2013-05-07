@@ -725,7 +725,7 @@ inline SQAPublisher::SQAPublisher(
           serviceAddress,
           servicePort,
           SQAUtil::getServiceTypeStr(SQAUtil::ServicePublisher),
-          isExternal,
+          poolSize,
           readTimeout,
           writeTimeout));
 }
@@ -1154,21 +1154,22 @@ inline unsigned int SQAWorkerMultiService::getConnectedWorkersNum()
 
 inline SQAEventEx* SQAWorkerMultiService::fetchTask()
 {
-  std::string serviceId;
+  StateQueueClient::ServiceId serviceId;
   std::string id;
   std::string data;
   SQAEventEx* pEvent = 0;
-  if (!reinterpret_cast<StateQueueClient*>(_connection)->popEx(serviceId, id, data))
+  if (!reinterpret_cast<StateQueueClient*>(_connection)->popm(serviceId, id, data))
     return pEvent;
 
-  pEvent = new SQAEventEx(serviceId, id, data);
+  pEvent = new SQAEventEx(0/*serviceId*/, id, data);
 
   return pEvent;
 }
 
 inline void SQAWorkerMultiService::deleteTask(const char* serviceId, const char* id)
 {
-  reinterpret_cast<StateQueueClient*>(_connection)->eraseEx(serviceId, id);
+  StateQueueClient::ServiceId dummy;
+  reinterpret_cast<StateQueueClient*>(_connection)->erasem(dummy/*serviceId*/, id);
 }
 
 //

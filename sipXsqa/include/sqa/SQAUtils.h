@@ -28,6 +28,9 @@
 
 extern const char* connectionEventStr[];
 
+#define LOG_TAG_WID(id) this->getClassName() << "::" << __FUNCTION__ << "." << __LINE__ << " this:" << this << " id:" << id
+#define LOG_TAG() this->getClassName() << "::" << __FUNCTION__ << "." << __LINE__ << " this:" << this
+
 class SQAUtil
 {
 public:
@@ -58,7 +61,7 @@ public:
 
   static bool isPublisherOnly(int serviceType)
   {
-    return (serviceType == ServiceRolePublisher);
+    return ((serviceType & ServiceRolePublisher) && !(serviceType & ServiceSpecDealer));
   }
 
   static bool isDealer(int serviceType)
@@ -79,6 +82,11 @@ public:
   static bool isWorker(int serviceType)
   {
     return (serviceType & ServiceRoleWatcher && serviceType & ServiceSpecWorker);
+  }
+
+  static bool isMulti(int serviceType)
+  {
+    return (serviceType & ServiceSpecMulti);
   }
 
   static const char* getServiceTypeStr(int serviceType);

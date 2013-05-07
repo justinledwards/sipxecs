@@ -65,7 +65,8 @@ libsipXsqa_la_SOURCES =  \
 	StateQueueDriverTest.cpp \
 	StateQueueListener.cpp \
 	StateQueuePersistence.cpp \
-	StateQueuePublisher.cpp
+	StateQueuePublisher.cpp \
+	StateQueueClient.cpp
 
 libsipXsqa_la_CXXFLAGS = \
 	$(SIPXSQA_COMMON_CXX_FLAGS)
