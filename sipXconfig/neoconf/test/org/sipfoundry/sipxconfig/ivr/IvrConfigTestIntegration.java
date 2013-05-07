@@ -41,6 +41,10 @@ import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
 
 public class IvrConfigTestIntegration extends ImdbTestCase {
+<<<<<<< HEAD
+=======
+    private IvrConfig m_ivrConfig;
+>>>>>>> PT-49088557 - have sipxconfig generate aliases when VM and AA role is enabled. This ensures vm alias permission is in replicated in mongo.
     private CoreContext m_coreContext;
     private ConfigManager m_configManager;
     private SipxReplicationContextImpl m_sipxReplicationContextImpl;
@@ -54,6 +58,10 @@ public class IvrConfigTestIntegration extends ImdbTestCase {
         super.onSetUpBeforeTransaction();
         TestHelper.cleanInsert("ClearDb.xml");
         sql("commserver/SeedLocations.sql");
+<<<<<<< HEAD
+=======
+        m_ivrConfig.setSipxReplicationContext(m_sipxReplicationContextImpl);
+>>>>>>> PT-49088557 - have sipxconfig generate aliases when VM and AA role is enabled. This ensures vm alias permission is in replicated in mongo.
         m_addressManager = EasyMock.createMock(AddressManager.class);
         m_addressManager.getSingleAddress(Ivr.SIP_ADDRESS);
         EasyMock.expectLastCall().andReturn(new Address(Ivr.SIP_ADDRESS, "localhost"));
@@ -97,6 +105,13 @@ public class IvrConfigTestIntegration extends ImdbTestCase {
         MongoTestCaseHelper.assertObjectPresent(getEntityCollection(), userMongo);*/
     }
 
+<<<<<<< HEAD
+=======
+    public void setIvrConfig(IvrConfig ivrConfig) {
+        m_ivrConfig = ivrConfig;
+    }
+
+>>>>>>> PT-49088557 - have sipxconfig generate aliases when VM and AA role is enabled. This ensures vm alias permission is in replicated in mongo.
     public void setCoreContext(CoreContext coreContext) {
         m_coreContext = coreContext;
     }
