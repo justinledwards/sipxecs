@@ -177,10 +177,11 @@ public:
 
   protected:
     StateQueueClient *_owner;
+    int _idx;
     int _type;
-    boost::asio::io_service _ioService;
-    boost::thread* _pIoServiceThread;
-    boost::asio::deadline_timer *_houseKeepingTimer;
+    //boost::asio::io_service _ioService;
+    //boost::thread* _pIoServiceThread;
+    boost::asio::deadline_timer *_keepAliveTimer;
     boost::asio::deadline_timer *_signinTimer;
     std::size_t _poolSize;
     typedef BlockingQueue<BlockingTcpClient::Ptr> ClientPool;
@@ -218,6 +219,7 @@ public:
   public:
     SQAClientCore(
           StateQueueClient* owner,
+          int idx,
           int type,
           const std::string& applicationId,
           const std::string& serviceAddress,
@@ -294,6 +296,10 @@ protected:
   int _expires;
   SQAClientCore* _core;
   std::vector<SQAClientCore*> _cores;
+  std::vector<SQAClientCore*> _fallbackCores;
+  boost::asio::io_service _ioService;
+  boost::thread* _pIoServiceThread;
+  boost::asio::deadline_timer *_fallbackTimer;
 
   friend class PublisherWatcherHATest;
 
@@ -323,11 +329,15 @@ public:
 
   ~StateQueueClient();
 
+  boost::asio::io_service* getIoService() {return &_ioService;}
+
   void getControlAddressPort(std::string& address, std::string& port);
   void getMSControlAddressPort(std::string& addresses, std::string& ports);
 
   bool startMultiService();
   bool startMultiService(const std::string& servicesAddresses, const std::string& servicesPorts);
+  bool setFallbackService();
+  bool setFallbackService(int innactivityTimeout, const std::string& servicesAddresses, const std::string& servicesPorts);
 
   inline const char* getClassName() {return "StateQueueClient";}
   inline EventQueue* getEventQueue()  {return &_eventQueue;}
@@ -358,8 +368,8 @@ private:
 
 public:
   
-  bool pop(std::string& id, std::string& data);
-  bool pop(std::string& id, std::string& data, int milliseconds);
+  bool pop(std::string& id, std::string& data, int& serviceId);
+  bool pop(std::string& id, std::string& data, int& serviceId, int milliseconds);
   bool watch(std::string& id, std::string& data);
   bool watch(std::string& id, std::string& data, int milliseconds);
 
@@ -368,10 +378,10 @@ public:
 
   bool publish(const std::string& eventId, const std::string& data, bool noresponse);
   bool publish(const std::string& eventId, const char* data, int dataLength, bool noresponse);
-  bool publishAndPersist(int workspace, const std::string& eventId, const std::string& data, int expires);
+  bool publishAndSet(int workspace, const std::string& eventId, const std::string& data, int expires);
 
 
-  bool erase(const std::string& id);
+  bool erase(const std::string& id, int serviceId=0);
   bool persist(int workspace, const std::string& dataId, int expires);
   bool set(int workspace, const std::string& dataId, const std::string& data, int expires);
 
@@ -387,18 +397,6 @@ public:
   bool mgeti(int workspace, const std::string& mapId, const std::string& dataId, std::string& data);
 
   bool remove(int workspace, const std::string& dataId);
-
-  unsigned int getConnectedWorkersNum() { return 0;}
-  bool popm(ServiceId&  serviceId, std::string& id, std::string &data) {return false;}
-  bool popm(ServiceId&  serviceId, std::string& id, std::string &data, int milliseconds) {return false;}
-  bool erasem(ServiceId& serviceId, const std::string& id) {return false;}
-
-  bool getserviceId(const std::string& serviceAddress, const std::string& servicePort, std::string& serviceID)
-  {
-    return false;
-  }
-  bool setEx(const std::string& serviceId, int workspace, const std::string& dataId, const std::string& data, int expires) {return false;}
-  bool getEx(const std::string& serviceId, int workspace, const std::string& dataId, std::string& data) { return false;}
 };
 
 

@@ -17,8 +17,8 @@
 #include <iostream>
 #include "sqa/UnitTest.h"
 
-const char* g_defaultSqaControlAddress = "192.168.13.2";
-const char* g_defaultZmqSubscriptionAddress = "192.168.13.2";
+const char* g_defaultSqaControlAddress = "192.168.1.57";
+const char* g_defaultZmqSubscriptionAddress = "192.168.1.57";
 
 const unsigned int g_defaultSqaControlPort = 6240;
 const unsigned int g_defaultZmqSubscriptionPort = 6242;

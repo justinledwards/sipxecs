@@ -393,7 +393,7 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
       for (std::size_t i = 0; i < _poolSize; i++)
       {
         //TODO: check _ioService ptr
-        BlockingTcpClient* pClient = new BlockingTcpClient(_applicationId, _ioService, readTimeout, writeTimeout, i == 0 ? SQA_KEY_ALPHA : SQA_KEY_DEFAULT );
+        BlockingTcpClient* pClient = new BlockingTcpClient(_applicationId, *_owner->getIoService(), readTimeout, writeTimeout, i == 0 ? SQA_KEY_ALPHA : SQA_KEY_DEFAULT );
         pClient->connect(_serviceAddress, _servicePort);
 
         if (_localAddress.empty())
@@ -409,13 +409,13 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
 
       boost::system::error_code ignored(boost::system::errc::success, boost::system::system_category ());
 
-      _signinTimer = new boost::asio::deadline_timer(_ioService, boost::posix_time::seconds(SQA_SIGNIN_ERROR_INTERVAL_SEC));
+      _signinTimer = new boost::asio::deadline_timer(*_owner->getIoService(), boost::posix_time::seconds(SQA_SIGNIN_ERROR_INTERVAL_SEC));
       signinLoop(ignored);
 
-      _houseKeepingTimer = new boost::asio::deadline_timer(_ioService, boost::posix_time::seconds(SQA_KEEP_ALIVE_ERROR_INTERVAL_SEC));
+      _keepAliveTimer = new boost::asio::deadline_timer(*_owner->getIoService(), boost::posix_time::seconds(SQA_KEEP_ALIVE_ERROR_INTERVAL_SEC));
       keepAliveLoop(ignored);
 
-      _pIoServiceThread = new boost::thread(boost::bind(&boost::asio::io_service::run, &_ioService));
+      //_pIoServiceThread = new boost::thread(boost::bind(&boost::asio::io_service::run, &_ioService));
 
 
       if (!SQAUtil::isPublisher(_type))
@@ -426,6 +426,7 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
 
     StateQueueClient::SQAClientCore::SQAClientCore(
           StateQueueClient* owner,
+          int idx,
           int type,
           const std::string& applicationId,
           const std::string& serviceAddress,
@@ -437,9 +438,10 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
           int keepAliveTicks
           ) :
             _owner(owner),
+            _idx(idx),
             _type(type),
-            _ioService(),
-            _pIoServiceThread(0),
+            //_ioService(),
+            //_pIoServiceThread(0),
             _poolSize(poolSize),
             _clientPool(_poolSize),
             _serviceAddress(serviceAddress),
@@ -498,13 +500,13 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
         _pEventThread = 0;
       }
 
-      _ioService.stop();
+//      _ioService.stop();
 
-      if (_houseKeepingTimer)
+      if (_keepAliveTimer)
       {
-        _houseKeepingTimer->cancel();
-        delete _houseKeepingTimer;
-        _houseKeepingTimer = 0;
+        _keepAliveTimer->cancel();
+        delete _keepAliveTimer;
+        _keepAliveTimer = 0;
       }
 
       if (_signinTimer)
@@ -514,12 +516,12 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
         _signinTimer = 0;
       }
 
-      if (_pIoServiceThread)
-      {
-        _pIoServiceThread->join();
-        delete _pIoServiceThread;
-        _pIoServiceThread = 0;
-      }
+//      if (_pIoServiceThread)
+//      {
+//        _pIoServiceThread->join();
+//        delete _pIoServiceThread;
+//        _pIoServiceThread = 0;
+//      }
 
       OS_LOG_INFO(FAC_NET, LOG_TAG_WID(_applicationId)
           << "Ok");
@@ -535,6 +537,15 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
           return true;
       }
       return false;
+    }
+
+    void StateQueueClient::SQAClientCore::forceKeepAliveTimer()
+    {
+      if (_keepAliveTimer->expires_from_now(boost::posix_time::seconds(SQA_KEEP_ALIVE_ERROR_INTERVAL_SEC)) > 0)
+      {
+        boost::system::error_code ignored(boost::system::errc::success, boost::system::system_category ());
+        keepAliveLoop(ignored);
+      }
     }
 
     void StateQueueClient::SQAClientCore::keepAliveLoop(const boost::system::error_code& e)
@@ -587,8 +598,8 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
           OS_LOG_DEBUG(FAC_NET, LOG_TAG_WID(_applicationId)
               << ", reschedule keep-alive in: " << _currentKeepAliveTicks
               << ", keep-alives so far: " << _keepAliveAttempts);
-          _houseKeepingTimer->expires_from_now(boost::posix_time::seconds(_currentKeepAliveTicks));
-          _houseKeepingTimer->async_wait(boost::bind(&StateQueueClient::SQAClientCore::keepAliveLoop, this, boost::asio::placeholders::error));
+          _keepAliveTimer->expires_from_now(boost::posix_time::seconds(_currentKeepAliveTicks));
+          _keepAliveTimer->async_wait(boost::bind(&StateQueueClient::SQAClientCore::keepAliveLoop, this, boost::asio::placeholders::error));
         }
       }
       else if (e)
@@ -887,6 +898,8 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
         popResponse.get("message-id", messageId);
         std::string messageData;
         popResponse.get("message-data", messageData);
+        popResponse.set("service-id", _idx);
+
         OS_LOG_DEBUG(FAC_NET, LOG_TAG_WID(_applicationId)
                 << " Popped event " << messageId << " -- " << messageData);
         _owner->getEventQueue()->enqueue(popResponse.data());
@@ -901,6 +914,7 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
       StateQueueMessage watcherData;
       watcherData.set("message-id", id);
       watcherData.set("message-data", data);
+      watcherData.set("service-id", _idx);
       _owner->getEventQueue()->enqueue(watcherData.data());
     }
 
@@ -1115,7 +1129,9 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
     _keepAliveTicks(keepAliveTicks),
     _eventQueue(1000),
     _expires(10),
-    _core(0)
+    _core(0),
+    _ioService(),
+    _pIoServiceThread(0)
   {
     if (SQAUtil::isWatcherOnly(_type))
       _zmqEventId = "sqw.";
@@ -1124,9 +1140,11 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
 
     _zmqEventId += zmqEventId;
 
-    _core = new SQAClientCore(this, _type, _applicationId, _serviceAddress,
+    _core = new SQAClientCore(this, 0, _type, _applicationId, _serviceAddress,
         _servicePort, _zmqEventId, _poolSize, _readTimeout, _writeTimeout, _keepAliveTicks);
     _cores.push_back(_core);
+
+    _pIoServiceThread = new boost::thread(boost::bind(&boost::asio::io_service::run, &_ioService));
 
     OS_LOG_INFO(FAC_NET, LOG_TAG_WID(_applicationId)
         << " for zmqEventId '" <<  _zmqEventId << "' CREATED");
@@ -1151,7 +1169,9 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
     _keepAliveTicks(keepAliveTicks),
     _eventQueue(1000),
     _expires(10),
-    _core(0)
+    _core(0),
+    _ioService(),
+    _pIoServiceThread(0)
   {
     if (SQAUtil::isWatcherOnly(_type))
       _zmqEventId = "sqw.";
@@ -1166,9 +1186,11 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
     strm << _applicationId << "-" << _cores.size();
     std::string coreApplicationId = strm.str();
 
-    _core = new SQAClientCore(this, _type, coreApplicationId, _serviceAddress,
+    _core = new SQAClientCore(this, 0, _type, coreApplicationId, _serviceAddress,
         _servicePort, _zmqEventId, _poolSize, _readTimeout, _writeTimeout, _keepAliveTicks);
     _cores.push_back(_core);
+
+    _pIoServiceThread = new boost::thread(boost::bind(&boost::asio::io_service::run, &_ioService));
 
     OS_LOG_INFO(FAC_NET, LOG_TAG_WID(_applicationId)
         <<  " for zmqEventId " << _zmqEventId << " CREATED");
@@ -1177,6 +1199,16 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
     StateQueueClient::~StateQueueClient()
   {
     terminate();
+
+    std::vector<SQAClientCore*>::iterator it;
+    for(it = _cores.begin(); it != _cores.end(); it++)
+    {
+      SQAClientCore* core = *it;
+
+      delete core;
+    }
+
+    _cores.clear();
   }
 
     bool StateQueueClient::startMultiService(const std::string& servicesAddresses,
@@ -1218,7 +1250,7 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
         strm << _applicationId << "-" << _cores.size();
         std::string coreApplicationId = strm.str();
 
-        SQAClientCore* core = new SQAClientCore(this, _type, coreApplicationId, addresses[i],
+        SQAClientCore* core = new SQAClientCore(this, _cores.size(), _type, coreApplicationId, addresses[i],
             ports[i], _zmqEventId, _poolSize, _readTimeout, _writeTimeout, _keepAliveTicks);
 
         _cores.push_back(core);
@@ -1238,6 +1270,29 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
       return startMultiService(servicesAddresses, servicesPorts);
     }
 
+    bool setFallbackService()
+    {
+      int timeout;
+      std::string servicesAddresses;
+      std::string servicesPorts;
+
+      getFallbackOptions(timeout, servicesAddresses, servicesPorts);
+
+      return setFallbackService(timeout, servicesAddresses, servicesPorts);
+    }
+
+    bool setFallbackService(int timeout, const std::string& servicesAddresses, const std::string& servicesPorts)
+    {
+      if (SQAUtil::isMulti(_type))
+      {
+        OS_LOG_NOTICE(FAC_NET, LOG_TAG_WID(_applicationId)
+                << " multi service does not need fallback service");
+        return true;
+      }
+
+
+    }
+
 
   void StateQueueClient::terminate()
   {
@@ -1246,15 +1301,23 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
 
      _terminate = true;
 
+     _ioService.stop();
+
      std::vector<SQAClientCore*>::iterator it;
      for(it = _cores.begin(); it != _cores.end(); it++)
      {
        SQAClientCore* core = *it;
 
        core->terminate();
-       delete core;
      }
-     _cores.clear();
+
+     if (_pIoServiceThread)
+     {
+       _pIoServiceThread->join();
+       delete _pIoServiceThread;
+       _pIoServiceThread = 0;
+     }
+
 
     OS_LOG_INFO(FAC_NET, LOG_TAG_WID(_applicationId)
         << "Ok");
@@ -1419,20 +1482,20 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
     }
 
 
-  bool StateQueueClient::pop(std::string& id, std::string& data)
+  bool StateQueueClient::pop(std::string& id, std::string& data, int& serviceId)
   {
     StateQueueMessage message;
     if (!pop(message))
       return false;
-    return message.get("message-id", id) && message.get("message-data", data);
+    return message.get("message-id", id) && message.get("message-data", data) && message.get("service-id", serviceId);
   }
 
-  bool StateQueueClient::pop(std::string& id, std::string& data, int milliseconds)
+  bool StateQueueClient::pop(std::string& id, std::string& data, int& serviceId, int milliseconds)
   {
     StateQueueMessage message;
     if (!pop(message, milliseconds))
       return false;
-    return message.get("message-id", id) && message.get("message-data", data);
+    return message.get("message-id", id) && message.get("message-data", data) && message.get("service-id", serviceId);
   }
 
 
@@ -1485,12 +1548,12 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
     return publish(eventId, data, dataLength);
   }
 
-  bool StateQueueClient::publishAndPersist(int workspace, const std::string& eventId, const std::string& data, int expires)
+  bool StateQueueClient::publishAndSet(int workspace, const std::string& eventId, const std::string& data, int expires)
   {
     if (!SQAUtil::isPublisher(_type))
       return false;
 
-    StateQueueMessage request(StateQueueMessage::PublishAndPersist, _type, eventId);
+    StateQueueMessage request(StateQueueMessage::PublishAndSet, _type, eventId);
 
     std::string id;
     request.get("message-id", id);
@@ -1520,13 +1583,21 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
   }
 
 
-  bool StateQueueClient::erase(const std::string& id)
+  bool StateQueueClient::erase(const std::string& id, int serviceId)
   {
     StateQueueMessage request(StateQueueMessage::Erase, _type);
     request.set("message-app-id", _applicationId.c_str());
+    request.set("erase-id", id.c_str());
+
+    if (serviceId < 0 || ((unsigned int)serviceId) > _cores.size())
+    {
+      return false;
+    }
+
+    SQAClientCore* core = _cores[serviceId];
 
     StateQueueMessage response;
-    if (!_core->sendAndReceive(request, response))
+    if (!core->sendAndReceive(request, response))
       return false;
 
     return checkMessageResponse(response);

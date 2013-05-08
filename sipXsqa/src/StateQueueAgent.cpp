@@ -259,8 +259,8 @@ void StateQueueAgent::onIncomingRequest(StateQueueConnection& conn, const char* 
     case StateQueueMessage::Publish:
       handlePublish(conn, message, id, appId, noExternalPublish);
       break;
-    case StateQueueMessage::PublishAndPersist:
-      handlePublishAndPersist(conn, message, id, appId, noExternalPublish);
+    case StateQueueMessage::PublishAndSet:
+      handlePublishAndSet(conn, message, id, appId, noExternalPublish);
       break;
     case StateQueueMessage::Pop:
       handlePop(conn, message, id, appId);
@@ -521,7 +521,7 @@ void StateQueueAgent::handlePublish(StateQueueConnection& conn, StateQueueMessag
   }
 }
 
-void StateQueueAgent::handlePublishAndPersist(StateQueueConnection& conn, StateQueueMessage& message,
+void StateQueueAgent::handlePublishAndSet(StateQueueConnection& conn, StateQueueMessage& message,
     const std::string& id, const std::string& appId, bool noExternalPublish)
 {
   int expires = 0;
@@ -558,7 +558,7 @@ void StateQueueAgent::handlePublishAndPersist(StateQueueConnection& conn, StateQ
     return;
   }
 
-  OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handlePublishAndPersist "
+  OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handlePublishAndSet "
           << "Received new command PUBLISH AND PERSIST: "
           << " message-id: " << id
           << " message-app-id: " << appId
@@ -569,7 +569,7 @@ void StateQueueAgent::handlePublishAndPersist(StateQueueConnection& conn, StateQ
 
   StateQueueRecord record(dataId, data, expires);
 
-  OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handlePublishAndPersist "
+  OS_LOG_DEBUG(FAC_NET, "StateQueueAgent::handlePublishAndSet "
           << "Will PUBLISH AND PERSIST: "
           << " record.id: " << id
           << " record.data: " << data
@@ -1080,13 +1080,20 @@ bool StateQueueAgent::remove(const std::string& appId, const std::string& dataId
 void StateQueueAgent::handleErase(StateQueueConnection& conn, StateQueueMessage& message,
     const std::string& id, const std::string& appId)
 {
+  std::string eraseId;
+  if (!message.get("erase-id", eraseId))
+  {
+    sendErrorResponse(message.getType(), conn, id, "Missing required argument erase-id.");
+    return;
+  }
+
   OS_LOG_INFO(FAC_NET, "StateQueueAgent::handleErase "
           << "Received new command ERASE. "
           << " message-id: " << id
-          << " message-app-id: " << appId);
+          << " message-app-id: " << appId
+          << " erase-id: " << eraseId);
 
-  erase(id);
-
+  erase(eraseId);
   sendOkResponse(message.getType(), conn, id, "");
 }
 

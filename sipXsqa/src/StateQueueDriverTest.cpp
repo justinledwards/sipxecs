@@ -65,7 +65,8 @@ DEFINE_TEST(TestDriver, TestSimplePop)
   pPublisher->enqueue("Hello SQA!");
   std::string messageId;
   std::string messageData;
-  ASSERT_COND(pClient->pop(messageId, messageData));
+  int serviceId;
+  ASSERT_COND(pClient->pop(messageId, messageData, serviceId));
   ASSERT_STR_EQ(messageData, "Hello SQA!");
   ASSERT_COND(pClient->erase(messageId));
 }
@@ -137,7 +138,8 @@ DEFINE_TEST(TestDriver, TestSimplePersistGetErase)
 
   std::string eventId;
   std::string eventData;
-  ASSERT_COND(pClient->pop(eventId, eventData));
+  int serviceId;
+  ASSERT_COND(pClient->pop(eventId, eventData, serviceId));
   ASSERT_COND(pClient->persist(1, eventId, 10));
   std::string sampleData;
   ASSERT_COND(pClient->get(1, eventId, sampleData));
@@ -167,7 +169,7 @@ DEFINE_TEST(TestDriver, TestWatcher)
   ASSERT_STR_EQ(watcherData, "Hello SQA!");
 }
 
-DEFINE_TEST(TestDriver, TestPublishAndPersist)
+DEFINE_TEST(TestDriver, TestPublishAndSet)
 {
   StateQueueAgent* _pAgent = GET_RESOURCE(TestDriver, StateQueueAgent*, "state_agent");
   std::string address;
@@ -175,10 +177,10 @@ DEFINE_TEST(TestDriver, TestPublishAndPersist)
   _pAgent->options().getOption("sqa-control-address", address);
   _pAgent->options().getOption("sqa-control-port", port);
 
-  SQAPublisher publisher("TestPublishAndPersist", address.c_str(), port.c_str(), false, 1, 100, 100);
-  SQAWatcher watcher("TestPublishAndPersist", address.c_str(), port.c_str(), "pub&persist", 1, 100, 100);
+  SQAPublisher publisher("TestPublishAndSet", address.c_str(), port.c_str(), false, 1, 100, 100);
+  SQAWatcher watcher("TestPublishAndSet", address.c_str(), port.c_str(), "pub&persist", 1, 100, 100);
   boost::this_thread::sleep(boost::posix_time::milliseconds(100));
-  ASSERT_COND(publisher.publishAndPersist(5, "pub&persist", "test-data", 10));
+  ASSERT_COND(publisher.publishAndSet(5, "pub&persist", "test-data", 10));
   SQAEvent* pEvent = watcher.watch();
   ASSERT_COND(pEvent);
   ASSERT_STR_EQ(pEvent->data, "test-data");
@@ -683,7 +685,7 @@ bool StateQueueDriverTest::runTests()
 //    VERIFY_TEST(TestDriver, TestGetSetErase);
 //    VERIFY_TEST(TestDriver, TestSimplePersistGetErase);
 //    VERIFY_TEST(TestDriver, TestWatcher);
-//    VERIFY_TEST(TestDriver, TestPublishAndPersist);
+//    VERIFY_TEST(TestDriver, TestPublishAndSet);
 //    VERIFY_TEST(TestDriver, TestDealAndPublish)
 
 //    VERIFY_TEST(TestDriver, TestPublishNoConnection);

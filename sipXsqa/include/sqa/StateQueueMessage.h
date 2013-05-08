@@ -38,7 +38,7 @@ public:
     Signin,
     Logout,
     Publish, /// publish an event
-    PublishAndPersist, /// Publish an event a persist it right after
+    PublishAndSet, /// Publish an event a persist it right after
     Enqueue, /// enqueue a state
     EnqueueAndPublish, /// Enqueue the message then publish it as watcher data
     Pop, /// Pop the state from the queue
@@ -247,7 +247,7 @@ inline StateQueueMessage::Type StateQueueMessage::getType() const
     }
     else if (messageType == "pap")
     {
-      _type = PublishAndPersist;
+      _type = PublishAndSet;
     }
     else if (messageType == "enqueue")
     {
@@ -351,7 +351,7 @@ inline void StateQueueMessage::setType(Type type)
     case Publish:
       newType = "publish";
       break;
-    case PublishAndPersist:
+    case PublishAndSet:
       newType = "pap";
       break;
     case Enqueue:

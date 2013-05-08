@@ -139,7 +139,8 @@ protected:
       StateQueueMessage ev;
       std::string data;
       std::string id;
-      if (pop(id, data))
+      int serviceId;
+      if (pop(id, data, serviceId))
       {
         if (_eventHandler)
           _eventHandler(_applicationId, data);

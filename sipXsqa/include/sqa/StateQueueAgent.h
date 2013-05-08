@@ -78,7 +78,7 @@ public:
 
   void publish(StateQueueRecord& record, bool noExternalPublish);
 
-  void handlePublishAndPersist(StateQueueConnection& conn, StateQueueMessage& message,
+  void handlePublishAndSet(StateQueueConnection& conn, StateQueueMessage& message,
     const std::string& id, const std::string& appId, bool noExternalPublish);
 
   void handlePop(StateQueueConnection& conn, StateQueueMessage& message,

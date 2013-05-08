@@ -79,15 +79,14 @@ class SQAEventEx
 public:
   SQAEventEx();
   SQAEventEx(const SQAEventEx& data);
-  SQAEventEx(const std::string& workerId_, const std::string& id_, const std::string& data_);
+  SQAEventEx(const std::string& id_, const std::string& data_, int serviceId);
   ~SQAEventEx();
 
-  char* worker_id;
   char* id;
   char* data;
-  int worker_id_len;
   int id_len;
   int data_len;
+  int service_id;
 };
 
 class SQAWatcher
@@ -196,7 +195,7 @@ public:
 
   bool publish(const char* id, const char* data, int len, bool noresponse);
 
-  bool publishAndPersist(int workspace, const char* id, const char* data, int expires);
+  bool publishAndSet(int workspace, const char* id, const char* data, int expires);
 
   //
   // Returns the local IP address of the client
@@ -352,16 +351,16 @@ public:
   // Delete the task from the cache.  This must be called after fetchTask()
   // work is done
   //
-  void deleteTask(const char* serviceId, const char* id);
+  void deleteTask(const char* id, int serviceId);
 
   //
   // Set a value in the event queue workspace
   //
-  void set(const char* serviceId, int workspace, const char* name, const char* data, int expires);
+  void set(int workspace, const char* name, const char* data, int expires);
   //
   // Get a value from the event queue workspace
   //
-  char* get(const char* serviceId, int workspace, const char* name);
+  char* get(int workspace, const char* name);
 
 private:
   SQAWorkerMultiService(const SQAWorkerMultiService& copy);
@@ -500,23 +499,16 @@ inline SQAEvent::SQAEvent(const std::string& id_, const std::string& data_)
 // Inline implementation of SQAEvent class
 //
 inline SQAEventEx::SQAEventEx() :
-  worker_id(0),
   id(0),
   data(0),
-  worker_id_len(0),
   id_len(0),
-  data_len(0)
+  data_len(0),
+  service_id(0)
 {
 }
 
 inline SQAEventEx::~SQAEventEx()
 {
-  if (NULL != worker_id)
-  {
-    delete [] worker_id;
-    worker_id = NULL;
-  }
-
   if (NULL != id)
   {
     delete [] id;
@@ -532,12 +524,6 @@ inline SQAEventEx::~SQAEventEx()
 
 inline SQAEventEx::SQAEventEx(const SQAEventEx& ev)
 {
-  worker_id_len = ev.worker_id_len;
-  worker_id = new char[worker_id_len + 1];
-  ::memcpy(worker_id, ev.worker_id, worker_id_len);
-  worker_id[worker_id_len] = '\0';
-
-
   id_len = ev.id_len;
   id = new char[id_len + 1];
   ::memcpy(id, ev.id, id_len);
@@ -547,16 +533,12 @@ inline SQAEventEx::SQAEventEx(const SQAEventEx& ev)
   data = new char[data_len + 1];
   ::memcpy(data, ev.data, data_len);
   data[data_len] = '\0';
+
+  service_id = ev.service_id;
 }
 
-inline SQAEventEx::SQAEventEx(const std::string& workerId_, const std::string& id_, const std::string& data_)
+inline SQAEventEx::SQAEventEx(const std::string& id_, const std::string& data_, int serviceId_)
 {
-  worker_id_len = workerId_.size();
-  worker_id = new char[worker_id_len + 1];
-  std::copy(workerId_.begin(), workerId_.end(), worker_id);
-  worker_id[worker_id_len] = '\0';
-
-
   id_len = id_.size();
   id = new char[id_len + 1];
   std::copy(id_.begin(), id_.end(), id);
@@ -566,6 +548,8 @@ inline SQAEventEx::SQAEventEx(const std::string& workerId_, const std::string& i
   data = new char[data_len + 1];
   std::copy(data_.begin(), data_.end(), data);
   data[data_len] = '\0';
+
+  service_id = serviceId_;
 }
 
 //
@@ -775,9 +759,9 @@ inline bool SQAPublisher::publish(const char* id, const char* data, int len, boo
   return reinterpret_cast<StateQueueClient*>(_connection)->publish(id, data, len, noresponse);
 }
 
-inline bool SQAPublisher::publishAndPersist(int workspace, const char* id, const char* data, int expires)
+inline bool SQAPublisher::publishAndSet(int workspace, const char* id, const char* data, int expires)
 {
-  return reinterpret_cast<StateQueueClient*>(_connection)->publishAndPersist(workspace, id, data, expires);
+  return reinterpret_cast<StateQueueClient*>(_connection)->publishAndSet(workspace, id, data, expires);
 }
 
 inline void SQAPublisher::set(int workspace, const char* name, const char* data, int expires)
@@ -1027,8 +1011,9 @@ inline SQAEvent* SQAWorker::fetchTask()
 {
   std::string id;
   std::string data;
+  int serviceId = 0;
   SQAEvent* pEvent = 0;
-  if (!reinterpret_cast<StateQueueClient*>(_connection)->pop(id, data))
+  if (!reinterpret_cast<StateQueueClient*>(_connection)->pop(id, data, serviceId))
     return pEvent;
 
   pEvent = new SQAEvent(id, data);
@@ -1039,7 +1024,7 @@ inline SQAEvent* SQAWorker::fetchTask()
 
 inline void SQAWorker::deleteTask(const char* id)
 {
-  reinterpret_cast<StateQueueClient*>(_connection)->erase(id);
+  reinterpret_cast<StateQueueClient*>(_connection)->erase(id, 0);
 }
 
 inline void SQAWorker::set(int workspace, const char* name, const char* data, int expires)
@@ -1147,52 +1132,36 @@ inline bool SQAWorkerMultiService::isConnected()
   return reinterpret_cast<StateQueueClient*>(_connection)->isConnected();
 }
 
-inline unsigned int SQAWorkerMultiService::getConnectedWorkersNum()
-{
-  return reinterpret_cast<StateQueueClient*>(_connection)->getConnectedWorkersNum();
-}
-
 inline SQAEventEx* SQAWorkerMultiService::fetchTask()
 {
-  StateQueueClient::ServiceId serviceId;
+  int serviceId = 0;
   std::string id;
   std::string data;
   SQAEventEx* pEvent = 0;
-  if (!reinterpret_cast<StateQueueClient*>(_connection)->popm(serviceId, id, data))
+  if (!reinterpret_cast<StateQueueClient*>(_connection)->pop(id, data, serviceId))
     return pEvent;
 
-  pEvent = new SQAEventEx(0/*serviceId*/, id, data);
+  pEvent = new SQAEventEx(id, data, serviceId);
 
   return pEvent;
 }
 
-inline void SQAWorkerMultiService::deleteTask(const char* serviceId, const char* id)
+inline void SQAWorkerMultiService::deleteTask(const char* id, int serviceId)
 {
-  StateQueueClient::ServiceId dummy;
-  reinterpret_cast<StateQueueClient*>(_connection)->erasem(dummy/*serviceId*/, id);
+  reinterpret_cast<StateQueueClient*>(_connection)->erase(id, serviceId);
 }
 
-//
-// Returns the id of internal workers
-//
-inline const char* SQAWorkerMultiService::getserviceId(const char* serviceAddress, const char* servicePort)
+inline void SQAWorkerMultiService::set(int workspace, const char* name, const char* data, int expires)
 {
-  std::string serviceId;
-  reinterpret_cast<StateQueueClient*>(_connection)->getserviceId(serviceAddress, servicePort, serviceId);
-  return NULL;
-}
-
-inline void SQAWorkerMultiService::set(const char* serviceId, int workspace, const char* name, const char* data, int expires)
-{
-  reinterpret_cast<StateQueueClient*>(_connection)->setEx(serviceId, workspace, name, data, expires);
+  reinterpret_cast<StateQueueClient*>(_connection)->set(workspace, name, data, expires);
 }
   //
   // Get a value from the event queue workspace
   //
-inline char* SQAWorkerMultiService::get(const char* serviceId, int workspace, const char* name)
+inline char* SQAWorkerMultiService::get(int workspace, const char* name)
 {
   std::string data;
-  if (!reinterpret_cast<StateQueueClient*>(_connection)->getEx(serviceId,workspace, name, data))
+  if (!reinterpret_cast<StateQueueClient*>(_connection)->get(workspace, name, data))
     return 0;
   char* buff = (char*)malloc(data.size() + 1);
   ::memset(buff, 0x00, data.size() + 1);
