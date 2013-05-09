@@ -252,6 +252,7 @@ public:
 
     bool isConnected();
     void keepAliveLoop(const boost::system::error_code& e);
+    void forceKeepAliveTimer();
   public:
     bool subscribe(const std::string& eventId, const std::string& sqaAddress);
 
@@ -296,10 +297,15 @@ protected:
   int _expires;
   SQAClientCore* _core;
   std::vector<SQAClientCore*> _cores;
-  std::vector<SQAClientCore*> _fallbackCores;
   boost::asio::io_service _ioService;
   boost::thread* _pIoServiceThread;
-  boost::asio::deadline_timer *_fallbackTimer;
+
+  std::string _fallbackServiceAddress;
+  std::string _fallbackServicePort;
+  int _fallbackTimeout;
+  boost::asio::deadline_timer* _fallbackTimer;
+  int _failedConnectCount;
+  bool _fallbackActive;
 
   friend class PublisherWatcherHATest;
 
@@ -332,12 +338,16 @@ public:
   boost::asio::io_service* getIoService() {return &_ioService;}
 
   void getControlAddressPort(std::string& address, std::string& port);
-  void getMSControlAddressPort(std::string& addresses, std::string& ports);
 
+
+  void getMSControlAddressPort(std::string& addresses, std::string& ports);
   bool startMultiService();
   bool startMultiService(const std::string& servicesAddresses, const std::string& servicesPorts);
+
+  bool getFallbackOptions(int& timeout, std::string& address, std::string& port);
   bool setFallbackService();
   bool setFallbackService(int innactivityTimeout, const std::string& servicesAddresses, const std::string& servicesPorts);
+  void fallbackLoop(const boost::system::error_code& e);
 
   inline const char* getClassName() {return "StateQueueClient";}
   inline EventQueue* getEventQueue()  {return &_eventQueue;}

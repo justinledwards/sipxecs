@@ -81,7 +81,7 @@ public:
     CPPUNIT_ASSERT(core->_type == cd._type);
     //CPPUNIT_ASSERT(core->_ioService);
 //    CPPUNIT_ASSERT(core->_pIoServiceThread != NULL);
-    CPPUNIT_ASSERT(core->_houseKeepingTimer != NULL);
+    CPPUNIT_ASSERT(core->_keepAliveTimer != NULL);
     CPPUNIT_ASSERT(core->_signinTimer != NULL);
     CPPUNIT_ASSERT(core->_poolSize == cd._poolSize);
 
@@ -168,7 +168,7 @@ public:
 //    CPPUNIT_ASSERT(core->_zmqContext == 0);
     CPPUNIT_ASSERT(core->_zmqSocket == 0);
     CPPUNIT_ASSERT(core->_pEventThread == 0);
-    CPPUNIT_ASSERT(core->_houseKeepingTimer == 0);
+    CPPUNIT_ASSERT(core->_keepAliveTimer == 0);
     CPPUNIT_ASSERT(core->_signinTimer == 0);
   //  CPPUNIT_ASSERT(core->_pIoServiceThread == 0);
 

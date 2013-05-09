@@ -541,10 +541,13 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
 
     void StateQueueClient::SQAClientCore::forceKeepAliveTimer()
     {
-      if (_keepAliveTimer->expires_from_now(boost::posix_time::seconds(SQA_KEEP_ALIVE_ERROR_INTERVAL_SEC)) > 0)
+      if (_keepAliveTimer &&  _keepAliveAttempts > 0) // // timer created  and fired at least once
       {
-        boost::system::error_code ignored(boost::system::errc::success, boost::system::system_category ());
-        keepAliveLoop(ignored);
+        if (_keepAliveTimer->expires_from_now(boost::posix_time::seconds(SQA_KEEP_ALIVE_ERROR_INTERVAL_SEC)) > 0)
+        {
+          boost::system::error_code ignored(boost::system::errc::success, boost::system::system_category());
+          keepAliveLoop(ignored);
+        }
       }
     }
 
@@ -1020,6 +1023,10 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
         // Put it back to the queue.  The server is down.
         //
         _clientPool.enqueue(conn);
+        if (_isAlive)
+        {
+          forceKeepAliveTimer();
+        }
         return false;
       }
 
@@ -1053,6 +1060,10 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
         // Put it back to the queue.  The server is down.
         //
         _clientPool.enqueue(conn);
+        if (_isAlive)
+        {
+          forceKeepAliveTimer();
+        }
         return false;
       }
 
@@ -1083,29 +1094,6 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
       }
     }
 
-    void StateQueueClient::getMSControlAddressPort(std::string& addresses, std::string& ports)
-    {
-      std::ostringstream sqaconfig;
-      sqaconfig << SIPX_CONFDIR << "/" << "sipxsqa-client.ini";
-      ServiceOptions configOptions(sqaconfig.str());
-      if (configOptions.parseOptions())
-      {
-        bool enabled = false;
-        if (configOptions.getOption("enabled", enabled, enabled) && enabled)
-        {
-          configOptions.getOption("sqa-control-addresses", addresses);
-          configOptions.getOption("sqa-control-ports", ports);
-        }
-        else
-        {
-          OS_LOG_ERROR(FAC_NET, LOG_TAG_WID(_applicationId)
-              << " Unable to read connection information from " << sqaconfig.str());
-          assert(false);
-        }
-      }
-    }
-
-
     StateQueueClient::StateQueueClient(
         int type,
         const std::string& applicationId,
@@ -1131,7 +1119,11 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
     _expires(10),
     _core(0),
     _ioService(),
-    _pIoServiceThread(0)
+    _pIoServiceThread(0),
+    _fallbackTimeout(0),
+    _fallbackTimer(0),
+    _failedConnectCount(0),
+    _fallbackActive(false)
   {
     if (SQAUtil::isWatcherOnly(_type))
       _zmqEventId = "sqw.";
@@ -1171,7 +1163,11 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
     _expires(10),
     _core(0),
     _ioService(),
-    _pIoServiceThread(0)
+    _pIoServiceThread(0),
+    _fallbackTimeout(0),
+    _fallbackTimer(0),
+    _failedConnectCount(0),
+    _fallbackActive(false)
   {
     if (SQAUtil::isWatcherOnly(_type))
       _zmqEventId = "sqw.";
@@ -1210,6 +1206,40 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
 
     _cores.clear();
   }
+
+    void StateQueueClient::getMSControlAddressPort(std::string& addresses, std::string& ports)
+    {
+      std::ostringstream sqaconfig;
+      sqaconfig << SIPX_CONFDIR << "/" << "sipxsqa-client.ini";
+      ServiceOptions configOptions(sqaconfig.str());
+      if (configOptions.parseOptions())
+      {
+        bool enabled = false;
+        if (configOptions.getOption("enabled", enabled, enabled) && enabled)
+        {
+          configOptions.getOption("sqa-control-addresses", addresses);
+          configOptions.getOption("sqa-control-ports", ports);
+        }
+        else
+        {
+          OS_LOG_ERROR(FAC_NET, LOG_TAG_WID(_applicationId)
+              << " Unable to read connection information from " << sqaconfig.str());
+          assert(false);
+        }
+      }
+    }
+
+
+    bool StateQueueClient::startMultiService()
+    {
+      std::string servicesAddresses;
+      std::string servicesPorts;
+
+      getMSControlAddressPort(servicesAddresses, servicesPorts);
+
+      return startMultiService(servicesAddresses, servicesPorts);
+    }
+
 
     bool StateQueueClient::startMultiService(const std::string& servicesAddresses,
         const std::string& servicesPorts)
@@ -1260,17 +1290,41 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
       return true;
     }
 
-    bool StateQueueClient::startMultiService()
+    bool StateQueueClient::getFallbackOptions(int& timeout, std::string& address, std::string& port)
     {
-      std::string servicesAddresses;
-      std::string servicesPorts;
+      std::ostringstream sqaconfig;
+      sqaconfig << SIPX_CONFDIR << "/" << "sipxsqa-client.ini";
+      ServiceOptions configOptions(sqaconfig.str());
 
-      getMSControlAddressPort(servicesAddresses, servicesPorts);
+      bool enabled = false;
+      bool ok = configOptions.parseOptions();
+      if (ok)
+      {
+        ok = configOptions.getOption("enabled", enabled, enabled) && enabled;
+      }
+      if (ok)
+      {
+        ok = configOptions.getOption("sqa-fallback-timeout", timeout);
+      }
+      if (ok)
+      {
+        ok = configOptions.getOption("sqa-fallback-control-address", address);
+      }
+      if (ok)
+      {
+        ok = configOptions.getOption("sqa-fallback-control-port", port);
+      }
 
-      return startMultiService(servicesAddresses, servicesPorts);
+      if  (!ok)
+      {
+        OS_LOG_ERROR(FAC_NET, LOG_TAG_WID(_applicationId)
+            << " Unable to read sqa fallback information from " << sqaconfig.str());
+      }
+
+      return ok;
     }
 
-    bool setFallbackService()
+    bool StateQueueClient::setFallbackService()
     {
       int timeout;
       std::string servicesAddresses;
@@ -1281,7 +1335,7 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
       return setFallbackService(timeout, servicesAddresses, servicesPorts);
     }
 
-    bool setFallbackService(int timeout, const std::string& servicesAddresses, const std::string& servicesPorts)
+    bool StateQueueClient::setFallbackService(int timeout, const std::string& serviceAddress, const std::string& servicePort)
     {
       if (SQAUtil::isMulti(_type))
       {
@@ -1290,7 +1344,73 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
         return true;
       }
 
+      if (_fallbackTimer)
+      {
+        OS_LOG_NOTICE(FAC_NET, LOG_TAG_WID(_applicationId)
+                << " fallback service already set to '" << _fallbackServiceAddress << ":" << _fallbackServicePort << "'");
+        return true;
+      }
 
+      _fallbackTimeout = timeout;
+      _fallbackServiceAddress = serviceAddress;
+      _fallbackServicePort = servicePort;
+
+      _fallbackTimer = new boost::asio::deadline_timer(_ioService, boost::posix_time::seconds(SQA_KEEP_ALIVE_ERROR_INTERVAL_SEC));
+      boost::system::error_code ignored(boost::system::errc::success, boost::system::system_category());
+
+      fallbackLoop(ignored);
+
+      return true;
+    }
+
+    void StateQueueClient::fallbackLoop(const boost::system::error_code& e)
+    {
+      if (_terminate)
+      {
+        OS_LOG_INFO(FAC_NET, LOG_TAG_WID(_applicationId)
+            << " terminate requested, fallbackLoop aborted");
+      }
+
+      if (e)
+      {
+        OS_LOG_ERROR(FAC_NET, LOG_TAG_WID(_applicationId)
+            << " fallbackLoop timer failed with error: " <<  e.message());
+      }
+
+      if (!_fallbackActive)
+      {
+        if (_core->isConnected())
+        {
+          _failedConnectCount = 0;
+        }
+        else
+        {
+          _failedConnectCount++;
+        }
+
+        if (_failedConnectCount > _fallbackTimeout)
+        {
+          OS_LOG_DEBUG(FAC_NET, LOG_TAG_WID(_applicationId)
+              << ", fallback done to '" << _fallbackServiceAddress << ":" << _fallbackServicePort << "'");
+
+          SQAClientCore* _oldCore = _core;
+          _core = new SQAClientCore(this, 0, _type, _applicationId, _fallbackServiceAddress,
+              _fallbackServicePort, _zmqEventId, _poolSize, _readTimeout, _writeTimeout, _keepAliveTicks);
+          delete _oldCore;
+
+          _fallbackActive = true;
+        }
+
+        if (!_terminate)
+        {
+          OS_LOG_DEBUG(FAC_NET, LOG_TAG_WID(_applicationId)
+              << ", reschedule fallback check in: " << 1
+              << ", failed connect count so far: " << _failedConnectCount);
+
+          _fallbackTimer->expires_from_now(boost::posix_time::seconds(1));
+          _fallbackTimer->async_wait(boost::bind(&StateQueueClient::fallbackLoop, this, boost::asio::placeholders::error));
+        }
+      }
     }
 
 
