@@ -52,3 +52,9 @@ AC_SUBST(IF, [if])
 AC_SUBST(IFDEF, [ifdef])
 AC_SUBST(IFNDEF, [ifndef])
 AC_SUBST(ENDIF, [endif])
+
+AC_DEFUN([SF_MISSING_DEP],[
+  if test "x$enable_dep_check" != "xno"; then
+    AC_MSG_ERROR([$1])
+  fi
+])
