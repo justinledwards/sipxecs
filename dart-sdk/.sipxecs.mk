@@ -20,11 +20,13 @@ dart-sdk.rpm_ : $(dart-sdk_$(DISTRO_ARCH)_RPM);
 
 $(dart-sdk_x86_64_RPM) : $(DOWNLOAD_LIB_CACHE)/$(dart-sdk_TARBALL)
 	fpm -f -s tar -t rpm -n dart-sdk -v $(dart-sdk_VER) --iteration $(dart-sdk_REL) \
-	   --license BSD --prefix /opt -a $(DISTRO_ARCH) $<
+	  --after-install $(SRC)/dart-sdk/after-install.sh \
+	  --license BSD --prefix /opt -a $(DISTRO_ARCH) $<
 
 # I cannot generate 32 bit rpm on 64 bit machine because fpm tool will not let me.
 # Yes this assumes build host machine is 64bit
 $(dart-sdk_i386_RPM) : $(DOWNLOAD_LIB_CACHE)/$(dart-sdk_TARBALL)
 	fpm -f -s tar -t rpm -n dart-sdk -v $(dart-sdk_VER) --iteration $(dart-sdk_REL) \
-	   --license BSD --prefix /opt -a noarch $<
+	  --after-install $(SRC)/$(PROJ)/after-install.sh \
+	  --license BSD --prefix /opt -a noarch $<
 	mv $(dart-sdk_intermediate_RPM) $@
