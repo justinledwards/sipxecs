@@ -86,15 +86,15 @@ java-gwt : $(gwt_SRC)
 DART_SRC = $(shell cd $(srcdir)/context/WEB-INF; find . -name '*.dart')
 DART_PKGS = $(shell cd $(srcdir)/packages; find . -name '*.js')
 
-java-dart : $(addprefix $(web_JAVAROOT)/,$(DART_SRC:.dart=.js) packages/$(DART_PKGS))
+java-dart : $(addprefix $(web_JAVAROOT)/,$(DART_SRC:.dart=.js) $(DART_PKGS))
 
-$(web_JAVAROOT)/packages/%.js : $(srcdir)/packages/%.js
+$(addprefix $(web_JAVAROOT)/,$(DART_PKGS)) : $(DART_PKGS)
 	test -d $(dir $@) || mkdir -p $(dir $@)
 	cp $< $@
 
-$(web_JAVAROOT)/%.js : context/WEB-INF/%.dart
+$(addprefix $(web_JAVAROOT)/,$(DART_SRC:.dart=.js)) : $(web_JAVAROOT)/%.js : context/WEB-INF/%.dart
 	test -d $(dir $@) || mkdir -p $(dir $@)
-	/opt/dart/dart-sdk/bin/dart2js -o$@ $<
+	$(DART_HOME)/bin/dart2js -o$@ $<
 
 # W E B
 web_COMPILE_PKGS = \
