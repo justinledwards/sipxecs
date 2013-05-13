@@ -409,13 +409,11 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
       OS_LOG_INFO(FAC_NET, LOG_TAG_WID(_applicationId)
           << " zmqEventId: " <<  _zmqEventId << " CREATED");
 
-      boost::system::error_code ignored(boost::system::errc::success, boost::system::system_category ());
+      signin();
+      setSigninTimer();
 
-      _signinTimer = new boost::asio::deadline_timer(*_owner->getIoService(), boost::posix_time::seconds(SQA_SIGNIN_ERROR_INTERVAL_SEC));
-      signinLoop(ignored);
-
-      _keepAliveTimer = new boost::asio::deadline_timer(*_owner->getIoService(), boost::posix_time::seconds(SQA_KEEP_ALIVE_ERROR_INTERVAL_SEC));
-      keepAliveLoop(ignored);
+      sendKeepAlive();
+      setKeepAliveTimer();
 
       //_pIoServiceThread = new boost::thread(boost::bind(&boost::asio::io_service::run, &_ioService));
 
@@ -547,9 +545,71 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
       {
         if (_keepAliveTimer->expires_from_now(boost::posix_time::seconds(SQA_KEEP_ALIVE_ERROR_INTERVAL_SEC)) > 0)
         {
-          boost::system::error_code ignored(boost::system::errc::success, boost::system::system_category());
-          keepAliveLoop(ignored);
+          sendKeepAlive();
+          setKeepAliveTimer();
         }
+      }
+    }
+
+    void StateQueueClient::SQAClientCore::sendKeepAlive()
+    {
+      //
+      // send keep-alives
+      //
+      for (unsigned i = 0; i < _poolSize; i++)
+      {
+        StateQueueMessage ping;
+        StateQueueMessage pong;
+        ping.setType(StateQueueMessage::Ping);
+        ping.set("message-app-id", _applicationId.c_str());
+
+        OS_LOG_DEBUG(FAC_NET, LOG_TAG_WID(_applicationId)
+            << "send keep-alive ping to " << _serviceAddress << ":" << _servicePort);
+        if (sendAndReceive(ping, pong))
+        {
+          if (pong.getType() == StateQueueMessage::Pong)
+          {
+            //
+            // Reset it back to the default value
+            //
+            _currentKeepAliveTicks = _keepAliveTicks;
+            _isAlive = true;
+            _keepAliveState = SQAOpOK;
+
+            OS_LOG_DEBUG(FAC_NET, LOG_TAG_WID(_applicationId)
+                << " Keep-alive response received from " << _serviceAddress << ":" << _servicePort);
+          }
+        }
+        else
+        {
+          //
+          // Reset the keep-alive to 1 so we attempt to reconnect every second
+          //
+          _currentKeepAliveTicks = SQA_KEEP_ALIVE_ERROR_INTERVAL_SEC;
+          _isAlive = false;
+          _keepAliveState = SQAOpFailed;
+          OS_LOG_INFO(FAC_NET, LOG_TAG_WID(_applicationId)
+              << " keep-alive failed to " << _serviceAddress << ":" << _servicePort);
+        }
+      }
+
+        _keepAliveAttempts++;
+        OS_LOG_DEBUG(FAC_NET, LOG_TAG_WID(_applicationId)
+            << ", reschedule keep-alive in: " << _currentKeepAliveTicks
+            << ", keep-alives so far: " << _keepAliveAttempts);
+    }
+
+    void StateQueueClient::SQAClientCore::setKeepAliveTimer()
+    {
+      if (!_terminate)
+      {
+        if (!_keepAliveTimer)
+        {
+          _keepAliveTimer = new boost::asio::deadline_timer(*_owner->getIoService(), boost::posix_time::seconds(SQA_KEEP_ALIVE_ERROR_INTERVAL_SEC));
+        }
+
+        _keepAliveTimer->expires_from_now(boost::posix_time::seconds(_currentKeepAliveTicks));
+        _keepAliveTimer->async_wait(boost::bind(&StateQueueClient::SQAClientCore::keepAliveLoop, this, boost::asio::placeholders::error));
       }
     }
 
@@ -557,55 +617,9 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
     {
       if (!e && !_terminate)
       {
-        //
-        // send keep-alives
-        //
-        for (unsigned i = 0; i < _poolSize; i++)
-        {
-          StateQueueMessage ping;
-          StateQueueMessage pong;
-          ping.setType(StateQueueMessage::Ping);
-          ping.set("message-app-id", _applicationId.c_str());
+        sendKeepAlive();
 
-          OS_LOG_DEBUG(FAC_NET, LOG_TAG_WID(_applicationId)
-              << "send keep-alive ping to " << _serviceAddress << ":" << _servicePort);
-          if (sendAndReceive(ping, pong))
-          {
-            if (pong.getType() == StateQueueMessage::Pong)
-            {
-              //
-              // Reset it back to the default value
-              //
-              _currentKeepAliveTicks = _keepAliveTicks;
-              _isAlive = true;
-              _keepAliveState = SQAOpOK;
-
-              OS_LOG_DEBUG(FAC_NET, LOG_TAG_WID(_applicationId)
-                  << " Keep-alive response received from " << _serviceAddress << ":" << _servicePort);
-            }
-          }
-          else
-          {
-            //
-            // Reset the keep-alive to 1 so we attempt to reconnect every second
-            //
-            _currentKeepAliveTicks = SQA_KEEP_ALIVE_ERROR_INTERVAL_SEC;
-            _isAlive = false;
-            _keepAliveState = SQAOpFailed;
-            OS_LOG_INFO(FAC_NET, LOG_TAG_WID(_applicationId)
-                << " keep-alive failed to " << _serviceAddress << ":" << _servicePort);
-          }
-        }
-
-        if (!_terminate)
-        {
-          _keepAliveAttempts++;
-          OS_LOG_DEBUG(FAC_NET, LOG_TAG_WID(_applicationId)
-              << ", reschedule keep-alive in: " << _currentKeepAliveTicks
-              << ", keep-alives so far: " << _keepAliveAttempts);
-          _keepAliveTimer->expires_from_now(boost::posix_time::seconds(_currentKeepAliveTicks));
-          _keepAliveTimer->async_wait(boost::bind(&StateQueueClient::SQAClientCore::keepAliveLoop, this, boost::asio::placeholders::error));
-        }
+        setKeepAliveTimer();
       }
       else if (e)
       {
@@ -618,7 +632,6 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
             << " terminate requested, keepAliveLoop aborted");
       }
     }
-
 
     bool StateQueueClient::SQAClientCore::subscribe(const std::string& eventId, const std::string& sqaAddress)
     {
@@ -646,58 +659,74 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
       return true;
     }
 
+    void StateQueueClient::SQAClientCore::signin()
+    {
+      StateQueueMessage request(StateQueueMessage::Signin, _type);
+      request.set("message-app-id", _applicationId.c_str());
+      request.set("subscription-expires", _subscriptionExpires);
+      request.set("subscription-event", _zmqEventId.c_str());
+
+      std::string clientType = SQAUtil::getClientStr(_type);
+      request.set("service-type", clientType);
+
+      OS_LOG_NOTICE(FAC_NET, LOG_TAG_WID(_applicationId)
+          << " Type=" << clientType << " SIGNIN");
+
+
+      bool ok = false;
+      StateQueueMessage response;
+      if (sendAndReceive(request, response))
+      {
+        ok = response.get("message-data", _publisherAddress);
+      }
+      else
+      {
+        ok = false;
+      }
+
+      OS_LOG_NOTICE(FAC_NET, LOG_TAG_WID(_applicationId)
+          << " Type=" << clientType << " SQA=" << _publisherAddress << ((ok) ? " SUCCEEDED" : " FAILED"));
+
+
+      if (ok)
+      {
+        _signinState = SQAOpOK;
+        _currentSigninTick = _subscriptionExpires * .75;
+      }
+      else
+      {
+        _signinState = SQAOpFailed;
+        _currentSigninTick = SQA_SIGNIN_ERROR_INTERVAL_SEC;
+      }
+
+      _signinAttempts++;
+      OS_LOG_DEBUG(FAC_NET, LOG_TAG_WID(_applicationId)
+          << ", reschedule signin in: " << _currentSigninTick
+          << ", signin so far: " << _signinAttempts);
+    }
+
+    void StateQueueClient::SQAClientCore::setSigninTimer()
+    {
+      if (!_terminate)
+      {
+
+        if (!_signinTimer)
+        {
+          _signinTimer = new boost::asio::deadline_timer(*_owner->getIoService(), boost::posix_time::seconds(SQA_SIGNIN_ERROR_INTERVAL_SEC));
+        }
+
+        _signinTimer->expires_from_now(boost::posix_time::seconds(_currentSigninTick));
+        _signinTimer->async_wait(boost::bind(&StateQueueClient::SQAClientCore::signinLoop, this, boost::asio::placeholders::error));
+      }
+    }
+
     void StateQueueClient::SQAClientCore::signinLoop(const boost::system::error_code& e)
     {
       if (!e && !_terminate)
       {
-        StateQueueMessage request(StateQueueMessage::Signin, _type);
-        request.set("message-app-id", _applicationId.c_str());
-        request.set("subscription-expires", _subscriptionExpires);
-        request.set("subscription-event", _zmqEventId.c_str());
+        signin();
 
-        std::string clientType = SQAUtil::getClientStr(_type);
-        request.set("service-type", clientType);
-
-        OS_LOG_NOTICE(FAC_NET, LOG_TAG_WID(_applicationId)
-            << " Type=" << clientType << " SIGNIN");
-
-
-        bool ok = false;
-        StateQueueMessage response;
-        if (sendAndReceive(request, response))
-        {
-          ok = response.get("message-data", _publisherAddress);
-        }
-        else
-        {
-          ok = false;
-        }
-
-        OS_LOG_NOTICE(FAC_NET, LOG_TAG_WID(_applicationId)
-            << " Type=" << clientType << " SQA=" << _publisherAddress << ((ok) ? " SUCCEEDED" : " FAILED"));
-
-
-        if (ok)
-        {
-          _signinState = SQAOpOK;
-          _currentSigninTick = _subscriptionExpires * .75;
-        }
-        else
-        {
-          _signinState = SQAOpFailed;
-          _currentSigninTick = SQA_SIGNIN_ERROR_INTERVAL_SEC;
-        }
-
-        if (!_terminate)
-        {
-          _signinAttempts++;
-          OS_LOG_DEBUG(FAC_NET, LOG_TAG_WID(_applicationId)
-              << ", reschedule signin in: " << _currentSigninTick
-              << ", signin so far: " << _signinAttempts);
-
-          _signinTimer->expires_from_now(boost::posix_time::seconds(_currentSigninTick));
-          _signinTimer->async_wait(boost::bind(&StateQueueClient::SQAClientCore::signinLoop, this, boost::asio::placeholders::error));
-        }
+        setSigninTimer();
       }
       else if (e)
       {
@@ -1288,9 +1317,8 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
       _fallback._currentFailedConnects = 0;
       _fallback._isActive = false;
 
-      _fallback._timer = new boost::asio::deadline_timer(_ioService, boost::posix_time::seconds(SQA_KEEP_ALIVE_ERROR_INTERVAL_SEC));
-      boost::system::error_code ignored(boost::system::errc::success, boost::system::system_category());
-      fallbackLoop(ignored);
+      checkFallback();
+      setFallbackTimer();
 
       return true;
     }
@@ -1356,20 +1384,8 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
       return false;
     }
 
-    void StateQueueClient::fallbackLoop(const boost::system::error_code& e)
+    void StateQueueClient::checkFallback()
     {
-      if (_terminate)
-      {
-        OS_LOG_INFO(FAC_NET, LOG_TAG_WID(_applicationId)
-            << " terminate requested, fallbackLoop aborted");
-      }
-
-      if (e)
-      {
-        OS_LOG_ERROR(FAC_NET, LOG_TAG_WID(_applicationId)
-            << " fallbackLoop timer failed with error: " <<  e.message());
-      }
-
       bool hasConnectedCore = false;
 
       // In case fallback is active try get back to primary core
@@ -1404,9 +1420,17 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
       {
         hasConnectedCore = trySecondaryCore();
       }
+    }
 
+    void StateQueueClient::setFallbackTimer()
+    {
       if (!_terminate)
       {
+        if (!_fallback._timer)
+        {
+          _fallback._timer = new boost::asio::deadline_timer(_ioService, boost::posix_time::seconds(SQA_KEEP_ALIVE_ERROR_INTERVAL_SEC));
+        }
+
         OS_LOG_DEBUG(FAC_NET, LOG_TAG_WID(_applicationId)
             << ", reschedule fallback check in: " << 1
             << ", failed connect count so far: " << _fallback._currentFailedConnects);
@@ -1414,6 +1438,24 @@ void StateQueueClient::SQAClientCore::BlockingTcpClient::setReadTimeout(boost::a
         _fallback._timer->expires_from_now(boost::posix_time::seconds(1));
         _fallback._timer->async_wait(boost::bind(&StateQueueClient::fallbackLoop, this, boost::asio::placeholders::error));
       }
+    }
+
+    void StateQueueClient::fallbackLoop(const boost::system::error_code& e)
+    {
+      if (_terminate)
+      {
+        OS_LOG_INFO(FAC_NET, LOG_TAG_WID(_applicationId)
+            << " terminate requested, fallbackLoop aborted");
+      }
+
+      if (e)
+      {
+        OS_LOG_ERROR(FAC_NET, LOG_TAG_WID(_applicationId)
+            << " fallbackLoop timer failed with error: " <<  e.message());
+      }
+
+      checkFallback();
+      setFallbackTimer();
     }
 
 

@@ -249,11 +249,15 @@ public:
     }
 
     bool isConnected();
+    void sendKeepAlive();
+    void setKeepAliveTimer();
     void keepAliveLoop(const boost::system::error_code& e);
     void forceKeepAliveTimer();
   public:
     bool subscribe(const std::string& eventId, const std::string& sqaAddress);
 
+    void signin();
+    void setSigninTimer();
     void signinLoop(const boost::system::error_code& e);
 
     bool logout();
@@ -364,7 +368,10 @@ private:
   bool start(const std::string& servicesAddresses, const std::string& servicesAddressesAll, const std::string& port);
   bool getClientOptions(SQAClientUserApp user, std::string& preferredAddreses, std::string& addresses, std::string& port);
 
+  void checkFallback();
+  void setFallbackTimer();
   void fallbackLoop(const boost::system::error_code& e);
+
   bool tryPrimaryCore();
   bool trySecondaryCore();
   bool createFallbackCore();
