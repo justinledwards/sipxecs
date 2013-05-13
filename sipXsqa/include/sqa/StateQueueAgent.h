@@ -31,7 +31,6 @@
 #include "StateQueueListener.h"
 #include "zmq.hpp"
 #include "RedisClientAsync.h"
-#include "SQAExternalPublisher.h"
 
 
 class StateQueueAgent : boost::noncopyable
@@ -61,25 +60,25 @@ public:
 
 
   void handleSignin(StateQueueConnection& conn, StateQueueMessage& message,
-    const std::string& id, const std::string& appId, bool noExternalPublish);
+    const std::string& id, const std::string& appId);
 
   void handleLogout(StateQueueConnection& conn, StateQueueMessage& message,
-    const std::string& id, const std::string& appId, bool noExternalPublish);
+    const std::string& id, const std::string& appId);
 
   void handleEnqueue(StateQueueConnection& conn, StateQueueMessage& message,
     const std::string& id, const std::string& appId);
   void enqueue(StateQueueRecord& record);
 
   void handleEnqueueAndPublish(StateQueueConnection& conn, StateQueueMessage& message,
-    const std::string& id, const std::string& appId, bool noExternalPublish);
+    const std::string& id, const std::string& appId);
 
   void handlePublish(StateQueueConnection& conn, StateQueueMessage& message,
-    const std::string& id, const std::string& appId, bool noExternalPublish);
+    const std::string& id, const std::string& appId);
 
-  void publish(StateQueueRecord& record, bool noExternalPublish);
+  void publish(StateQueueRecord& record);
 
   void handlePublishAndSet(StateQueueConnection& conn, StateQueueMessage& message,
-    const std::string& id, const std::string& appId, bool noExternalPublish);
+    const std::string& id, const std::string& appId);
 
   void handlePop(StateQueueConnection& conn, StateQueueMessage& message,
     const std::string& id, const std::string& appId);
@@ -149,7 +148,6 @@ protected:
   boost::asio::io_service _ioService;
   TimedQueue _cache;
   StateQueuePublisher _publisher;
-  SQAExternalPublisher _externalPublisher;
   StateQueuePersistence _dataStore;
   unsigned _queueWorkSpaceIndex;
   StateQueueListener _listener;
@@ -160,6 +158,7 @@ protected:
   bool _terminated;
   friend class StateQueueListener;
   friend class StateQueueConnection;
+  friend class StateQueueConnectionTest;
 };
 
 

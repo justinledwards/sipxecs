@@ -34,74 +34,83 @@ extern const char* connectionEventStr[];
 class SQAUtil
 {
 public:
-  static const int ServiceUnknown;
-  static const int ServicePublisher;
-  static const int ServiceDealer;
-  static const int ServiceWatcher;
-  static const int ServiceWorker;
-  static const int ServiceWorkerMulti;
+  static const int SQAClientRolePublisher = 0x1;
+  static const int SQAClientRoleWatcher = 0x10;
 
-  static const int ServiceRolePublisher = 0x1;
-  static const int ServiceRoleWatcher = 0x10;
+  static const int SQAClientRoleDealer = 0x1000;
+  static const int SQAClientRoleWorker = 0x10000;
 
-  static const int ServiceSpecDealer = 0x1000;
-  static const int ServiceSpecWorker = 0x10000;
-  static const int ServiceSpecMulti  = 0x100000;
-  static const int ServiceSpecExternal= 0x1000000;
+  static const int SQAClientUnknown = 0;
+  static const int SQAClientPublisher = SQAClientRolePublisher;
+  static const int SQAClientDealer = SQAClientRolePublisher | SQAClientRoleDealer;
+  static const int SQAClientWatcher = SQAClientRoleWatcher;
+  static const int SQAClientWorker = SQAClientRoleWatcher | SQAClientRoleWorker;
 
-  static bool isExternal(int serviceType)
+
+  static bool isPublisher(int clientType)
   {
-    return (serviceType & ServiceSpecExternal);
+    return (clientType & SQAClientRolePublisher);
   }
 
-  static bool isPublisher(int serviceType)
+  static bool isPublisherOnly(int clientType)
   {
-    return (serviceType & ServiceRolePublisher);
+    return ((clientType & SQAClientRolePublisher) && !(clientType & SQAClientRoleDealer));
   }
 
-  static bool isPublisherOnly(int serviceType)
+  static bool isDealer(int clientType)
   {
-    return ((serviceType & ServiceRolePublisher) && !(serviceType & ServiceSpecDealer));
+    return (clientType & SQAClientRolePublisher && clientType & SQAClientRoleDealer);
   }
 
-  static bool isDealer(int serviceType)
+  static bool isWatcher(int clientType)
   {
-    return (serviceType & ServiceRolePublisher && serviceType & ServiceSpecDealer);
+    return (clientType & SQAClientRoleWatcher);
   }
 
-  static bool isWatcher(int serviceType)
+  static bool isWatcherOnly(int clientType)
   {
-    return (serviceType & ServiceRoleWatcher);
+    return (clientType == SQAClientRoleWatcher);
   }
 
-  static bool isWatcherOnly(int serviceType)
+  static bool isWorker(int clientType)
   {
-    return (serviceType == ServiceRoleWatcher);
+    return (clientType & SQAClientRoleWatcher && clientType & SQAClientRoleWorker);
   }
 
-  static bool isWorker(int serviceType)
+  static const char* getClientStr(int clientType)
   {
-    return (serviceType & ServiceRoleWatcher && serviceType & ServiceSpecWorker);
+    if (isPublisherOnly(clientType))
+    {
+      return "publisher";
+    }
+    if (isWatcherOnly(clientType))
+    {
+      return "watcher";
+    }
+    if (isDealer(clientType))
+    {
+      return "dealer";
+    }
+    if (isWorker(clientType))
+    {
+      return "worker";
+    }
+
+    return "unknown";
   }
 
-  static bool isMulti(int serviceType)
-  {
-    return (serviceType & ServiceSpecMulti);
-  }
-
-  static const char* getServiceTypeStr(int serviceType);
   static const char* getConnectionEventStr(ConnectionEvent connectionEvent);
 
   static void generateRecordId(std::string &recordId, ConnectionEvent event);
 
-  static bool generateZmqEventId(std::string &zmqEventId, int serviceType, std::string &eventId);
+  static bool generateId(std::string &id, int clientType, const std::string &eventId);
 
-  static bool generateId(std::string &id, int serviceType, const std::string &eventId);
+  static bool validateId(const std::string &id, int clientType);
+  static bool validateId(const std::string &id, int clientType, const std::string &eventId);
 
-  static bool validateId(const std::string &id, int serviceType);
-  static bool validateId(const std::string &id, int serviceType, const std::string &eventId);
   static bool validateIdHexComponent(const std::string &hex);
 
+  static bool generateZmqEventId(std::string &zmqEventId, int clientType, std::string &eventId);
 };
 
 

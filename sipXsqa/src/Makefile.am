@@ -59,7 +59,6 @@ libsipXsqa_la_LDFLAGS = \
 
 libsipXsqa_la_SOURCES =  \
 	SQAUtils.cpp \
-	SQAExternalPublisher.cpp \
 	StateQueueAgent.cpp \
 	StateQueueConnection.cpp \
 	StateQueueDriverTest.cpp \

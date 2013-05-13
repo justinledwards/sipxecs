@@ -34,6 +34,13 @@ enum SQAOpState
   SQAOpFailed,
 };
 
+enum SQAClientUserApp
+{
+  SQAUserAppGeneric = 0,
+  SQAUserAppRLS,
+  SQAUserAppProxyPlugin,
+};
+
 #define PublisherWatcherPrefix "sqw"
 #define DealerWorkerPrefix "sqa"
 #define UnknownPrefix "unk"

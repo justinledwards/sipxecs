@@ -179,8 +179,6 @@ public:
     StateQueueClient *_owner;
     int _idx;
     int _type;
-    //boost::asio::io_service _ioService;
-    //boost::thread* _pIoServiceThread;
     boost::asio::deadline_timer *_keepAliveTimer;
     boost::asio::deadline_timer *_signinTimer;
     std::size_t _poolSize;
@@ -282,8 +280,9 @@ public:
 
 protected:
   int _type;
+  SQAClientUserApp _userApp;
   std::string _applicationId;
-  std::string _serviceAddress;
+  std::string _serviceAddress; // address of the primary core (for publisher/dealer clients only)
   std::string _servicePort;
   bool _terminate;
   std::string _zmqEventId;
@@ -299,13 +298,17 @@ protected:
   std::vector<SQAClientCore*> _cores;
   boost::asio::io_service _ioService;
   boost::thread* _pIoServiceThread;
+  std::string _clientConfig;
 
-  std::string _fallbackServiceAddress;
-  std::string _fallbackServicePort;
-  int _fallbackTimeout;
-  boost::asio::deadline_timer* _fallbackTimer;
-  int _failedConnectCount;
-  bool _fallbackActive;
+  struct
+  {
+    std::vector<std::string> _servicesAddresses;
+    unsigned int _serviceIdx;
+    unsigned int _failedConnectsTicks;
+    boost::asio::deadline_timer* _timer;
+    unsigned int _currentFailedConnects;
+    bool _isActive;
+  } _fallback;
 
   friend class PublisherWatcherHATest;
 
@@ -314,7 +317,7 @@ public:
   StateQueueClient(
         int type,
         const std::string& applicationId,
-        const std::string& serviceAddress,
+        const std::string& servicesAddresses,
         const std::string& servicePort,
         const std::string& zmqEventId,
         std::size_t poolSize,
@@ -325,6 +328,7 @@ public:
 
   StateQueueClient(
         int type,
+        SQAClientUserApp user,
         const std::string& applicationId,
         const std::string& zmqEventId,
         std::size_t poolSize,
@@ -337,17 +341,8 @@ public:
 
   boost::asio::io_service* getIoService() {return &_ioService;}
 
-  void getControlAddressPort(std::string& address, std::string& port);
-
-
-  void getMSControlAddressPort(std::string& addresses, std::string& ports);
-  bool startMultiService();
-  bool startMultiService(const std::string& servicesAddresses, const std::string& servicesPorts);
-
-  bool getFallbackOptions(int& timeout, std::string& address, std::string& port);
-  bool setFallbackService();
-  bool setFallbackService(int innactivityTimeout, const std::string& servicesAddresses, const std::string& servicesPorts);
-  void fallbackLoop(const boost::system::error_code& e);
+  void setSQAClientConfig(const std::string& clientConfigFilePath) { _clientConfig = clientConfigFilePath;}
+  bool setFallbackService(const std::string& servicesAddresses, const std::string& port, int failedConnectsTicks = 10);
 
   inline const char* getClassName() {return "StateQueueClient";}
   inline EventQueue* getEventQueue()  {return &_eventQueue;}
@@ -365,16 +360,25 @@ public:
     return _core->isConnected();
   }
 
+private:
+  bool start(const std::string& servicesAddresses, const std::string& servicesAddressesAll, const std::string& port);
+  bool getClientOptions(SQAClientUserApp user, std::string& preferredAddreses, std::string& addresses, std::string& port);
+
+  void fallbackLoop(const boost::system::error_code& e);
+  bool tryPrimaryCore();
+  bool trySecondaryCore();
+  bool createFallbackCore();
+
   bool checkMessageResponse(StateQueueMessage& response);
 
   bool checkMessageResponse(StateQueueMessage& response, const std::string& dataId);
-private:
+
   bool pop(StateQueueMessage& ev);
   bool pop(StateQueueMessage& ev, int milliseconds);
 
   bool enqueue(const std::string& eventId, const std::string& data, int expires = 30, bool publish= false);
 
-    bool internal_publish(const std::string& eventId, const std::string& data, bool noresponse = false);
+  bool internal_publish(const std::string& eventId, const std::string& data, bool noresponse = false);
 
 public:
   

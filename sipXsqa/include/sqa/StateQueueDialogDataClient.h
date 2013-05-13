@@ -43,7 +43,7 @@ inline StateQueueDialogDataClient::StateQueueDialogDataClient(
   const std::string& applicationId,
   const std::string& serviceAddress,
   const std::string& servicePort,
-  std::size_t poolSize) : StateQueueClient(SQAUtil::ServicePublisher,
+  std::size_t poolSize) : StateQueueClient(SQAUtil::SQAClientPublisher,
         applicationId,
         serviceAddress,
         servicePort,

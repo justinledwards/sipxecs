@@ -46,6 +46,7 @@ struct SQAAgentData
 
   std::string configFilePath;
   std::string logFilePath;
+  std::string clientIniFilePath;
 
   std::string sqaControlPort;
   std::string sqaControlAddress;
@@ -53,8 +54,11 @@ struct SQAAgentData
   std::string sqaZmqSubscriptionPort;
   std::string sqaZmqSubscriptionAddress;
 
-  std::string sqaControlPortAll;
   std::string sqaControlAddressAll;
+
+  SQAClientUserApp userApp;
+  std::string sqaControlPreferredAddress;
+
 
   pid_t pid;
 
@@ -64,13 +68,16 @@ struct SQAAgentData
 class SQAAgentUtil : boost::noncopyable
 {
 public:
-  SQAAgentUtil();
+  SQAAgentUtil() {}
   SQAAgentUtil(const std::string& program);
 
-  ~SQAAgentUtil();
+  ~SQAAgentUtil() {}
 
   void setProgram(const std::string& program);
   void generateSQAAgentData(std::vector<SQAAgentData::Ptr> &agents, unsigned int agentNum, bool ha);
+  void setUserAppPreferredAddress(SQAAgentData::Ptr data, SQAClientUserApp userApp, const std::string& preferredAddress);
+
+  void generateSQACClientIni(SQAAgentData::Ptr data);
 
   bool startSQAAgent(SQAAgentData::Ptr agentData);
   bool stopSQAAgent(SQAAgentData::Ptr agentData);
@@ -78,8 +85,8 @@ public:
 private:
   void generateSQAConfig(SQAAgentData::Ptr data);
 
+
   std::string _program;
-  int _configFileIdx;
 };
 
 

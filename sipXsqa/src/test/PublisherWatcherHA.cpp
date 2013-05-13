@@ -17,8 +17,8 @@ class PublisherWatcherHATest : public CppUnit::TestCase
   CPPUNIT_TEST_SUITE(PublisherWatcherHATest);
   //CPPUNIT_TEST(PublisherWatcherRegularBehaviorTest);
   //CPPUNIT_TEST(OneLocalPublisherTwoHAAgentsOneRemoteWatcherTest);
-  CPPUNIT_TEST(DealerWorkerRegularBehaviorTest);
-  CPPUNIT_TEST(OneDealerAgentAgentOneWorkerTest);
+//  CPPUNIT_TEST(DealerWorkerRegularBehaviorTest);
+//  CPPUNIT_TEST(OneDealerAgentAgentOneWorkerTest);
   CPPUNIT_TEST_SUITE_END();
 
 
@@ -79,25 +79,23 @@ public:
   {
     CPPUNIT_ASSERT(core->_owner == client);
     CPPUNIT_ASSERT(core->_type == cd._type);
-    //CPPUNIT_ASSERT(core->_ioService);
-//    CPPUNIT_ASSERT(core->_pIoServiceThread != NULL);
     CPPUNIT_ASSERT(core->_keepAliveTimer != NULL);
     CPPUNIT_ASSERT(core->_signinTimer != NULL);
     CPPUNIT_ASSERT(core->_poolSize == cd._poolSize);
 
     CPPUNIT_ASSERT(((int)core->_clientPool.size()) == cd._poolSize);
-    CPPUNIT_ASSERT(core->_serviceAddress == cd._serviceAddress);
+    CPPUNIT_ASSERT( std::string::npos != cd._serviceAddress.find(core->_serviceAddress));
     CPPUNIT_ASSERT(core->_servicePort == cd._servicePort);
     CPPUNIT_ASSERT(core->_terminate == false);
     if (!SQAUtil::isPublisher(cd._type))
     {
-      //CPPUNIT_ASSERT(core->_zmqContext != NULL);
+      CPPUNIT_ASSERT(core->_zmqContext != NULL);
       CPPUNIT_ASSERT(core->_zmqSocket != NULL);
       CPPUNIT_ASSERT(core->_pEventThread != NULL);
     }
     else
     {
-      //CPPUNIT_ASSERT(core->_zmqContext == NULL);
+      CPPUNIT_ASSERT(core->_zmqContext == NULL);
       CPPUNIT_ASSERT(core->_zmqSocket == NULL);
       CPPUNIT_ASSERT(core->_pEventThread == NULL);
     }
@@ -165,7 +163,7 @@ public:
   void checkSQAClientCoreAfterStop(StateQueueClient::SQAClientCore* core)
   {
     CPPUNIT_ASSERT(core->_terminate == true);
-//    CPPUNIT_ASSERT(core->_zmqContext == 0);
+    CPPUNIT_ASSERT(core->_zmqContext == 0);
     CPPUNIT_ASSERT(core->_zmqSocket == 0);
     CPPUNIT_ASSERT(core->_pEventThread == 0);
     CPPUNIT_ASSERT(core->_keepAliveTimer == 0);
@@ -231,9 +229,12 @@ public:
 
   void checkMSCoreAfterStartup(StateQueueClient& worker, int coreIdx, SQAClientData cd, bool serviceIsUp)
   {
+    if (coreIdx > 0)
+    {
     std::stringstream strm;
     strm << cd._applicationId << "-" << coreIdx;
     cd._applicationId = strm.str();
+    }
 
     CPPUNIT_ASSERT(worker._cores.size() > (unsigned int)coreIdx);
 
@@ -255,7 +256,7 @@ public:
    // TEST: External publish uses directly the eventId as messageId with no modifications
    CPPUNIT_ASSERT(boost::starts_with(wEventId.c_str(), sqwEventId));
    // TEST: Verify that the eventId has the proper format with sqw.eventId.hex4-hex4
-   CPPUNIT_ASSERT(SQAUtil::validateId(wEventId, SQAUtil::ServicePublisher, eventId));
+   CPPUNIT_ASSERT(SQAUtil::validateId(wEventId, SQAUtil::SQAClientPublisher, eventId));
    // TEST: Verify that received data match what was sent
    CPPUNIT_ASSERT(0 == wEventData.compare(data));
   }
@@ -275,9 +276,10 @@ public:
    // TEST: External publish uses directly the eventId as messageId with no modifications
    CPPUNIT_ASSERT(boost::starts_with(wEventId.c_str(), sqaEventId));
    // TEST: Verify that the eventId has the proper format with sqw.eventId.hex4-hex4
-   CPPUNIT_ASSERT(SQAUtil::validateId(wEventId, SQAUtil::ServiceDealer, eventId));
+   CPPUNIT_ASSERT(SQAUtil::validateId(wEventId, SQAUtil::SQAClientDealer, eventId));
    // TEST: Verify that received data match what was sent
    CPPUNIT_ASSERT(0 == wEventData.compare(data));
+   std::cout << serviceId << " " << wServiceId;
    CPPUNIT_ASSERT(serviceId == wServiceId);
    CPPUNIT_ASSERT(worker.erase(wEventId, wServiceId));
   }
@@ -289,7 +291,7 @@ public:
     _util.generateSQAAgentData(_agentsData, 1, true);
 
     // prepare publisher to local for events of type "reg"
-    SQAClientData pd(SQAUtil::ServicePublisher, "Publisher",_agentsData[0]->sqaControlAddress,_agentsData[0]->sqaControlPort, "reg", 1, SQA_CONN_READ_TIMEOUT, SQA_CONN_WRITE_TIMEOUT, SQA_KEEP_ALIVE_INTERVAL_SEC);
+    SQAClientData pd(SQAUtil::SQAClientPublisher, "Publisher",_agentsData[0]->sqaControlAddress,_agentsData[0]->sqaControlPort, "reg", 1, SQA_CONN_READ_TIMEOUT, SQA_CONN_WRITE_TIMEOUT, SQA_KEEP_ALIVE_INTERVAL_SEC);
     StateQueueClient* publisher = new StateQueueClient(pd._type, pd._applicationId, pd._serviceAddress, pd._servicePort, pd._zmqEventId, pd._poolSize);
 
     // TEST: Publisher started but cannot connect to agent (agent is not started yet)
@@ -300,7 +302,7 @@ public:
     CPPUNIT_ASSERT(!publisher->publish("reg", "reg-data", false));
 
     // prepare watchers to local for events of type "reg"
-    SQAClientData wd(SQAUtil::ServiceWatcher, "Watcher", _agentsData[0]->sqaControlAddress, _agentsData[0]->sqaControlPort, "reg", 1, SQA_CONN_READ_TIMEOUT, SQA_CONN_WRITE_TIMEOUT, SQA_KEEP_ALIVE_INTERVAL_SEC);
+    SQAClientData wd(SQAUtil::SQAClientWatcher, "Watcher", _agentsData[0]->sqaControlAddress, _agentsData[0]->sqaControlPort, "reg", 1, SQA_CONN_READ_TIMEOUT, SQA_CONN_WRITE_TIMEOUT, SQA_KEEP_ALIVE_INTERVAL_SEC);
     StateQueueClient* watcher = new StateQueueClient(wd._type, wd._applicationId, wd._serviceAddress, wd._servicePort, wd._zmqEventId, wd._poolSize);
 
     // TEST: Watcher started but cannot connect to agent (agent is not started yet)
@@ -358,11 +360,11 @@ public:
     boost::this_thread::sleep(boost::posix_time::milliseconds(100));
 
     // prepare publisher to local and remote for events of type "reg"
-    SQAClientData pd(SQAUtil::ServicePublisher, "PublisherLocal",_agentsData[0]->sqaControlAddress,_agentsData[0]->sqaControlPort, "reg", 1, SQA_CONN_READ_TIMEOUT, SQA_CONN_WRITE_TIMEOUT, SQA_KEEP_ALIVE_INTERVAL_SEC);
+    SQAClientData pd(SQAUtil::SQAClientPublisher, "PublisherLocal",_agentsData[0]->sqaControlAddress,_agentsData[0]->sqaControlPort, "reg", 1, SQA_CONN_READ_TIMEOUT, SQA_CONN_WRITE_TIMEOUT, SQA_KEEP_ALIVE_INTERVAL_SEC);
     StateQueueClient* publisher1 = new StateQueueClient(pd._type, pd._applicationId, pd._serviceAddress, pd._servicePort, pd._zmqEventId, pd._poolSize);
     // prepare watchers to local and remote for events of type "reg"
-    SQAClientData wd(SQAUtil::ServiceWatcher, "WatcherRemote", _agentsData[1]->sqaControlAddress, _agentsData[1]->sqaControlPort, "reg", 1, SQA_CONN_READ_TIMEOUT, SQA_CONN_WRITE_TIMEOUT, SQA_KEEP_ALIVE_INTERVAL_SEC);
-    StateQueueClient* watcher2 = new StateQueueClient(wd._type, wd._applicationId, wd._serviceAddress, wd._servicePort, wd._zmqEventId, wd._poolSize);
+    SQAClientData wd(SQAUtil::SQAClientWatcher, "WatcherRemote", _agentsData[1]->sqaControlAddress, _agentsData[1]->sqaControlPort, "reg", 1, SQA_CONN_READ_TIMEOUT, SQA_CONN_WRITE_TIMEOUT, SQA_KEEP_ALIVE_INTERVAL_SEC);
+    StateQueueClient* watcher2 = new StateQueueClient(wd._type, wd._applicationId, _agentsData[0]->sqaControlAddressAll, wd._servicePort, wd._zmqEventId, wd._poolSize);
 
     boost::this_thread::sleep(boost::posix_time::milliseconds(1500));
 
@@ -392,7 +394,7 @@ public:
     _util.generateSQAAgentData(_agentsData, 1, true);
 
     // prepare publisher to local for events of type "reg"
-    SQAClientData dd(SQAUtil::ServiceDealer, "Dealer",_agentsData[0]->sqaControlAddress,_agentsData[0]->sqaControlPort, "reg", 1, SQA_CONN_READ_TIMEOUT, SQA_CONN_WRITE_TIMEOUT, SQA_KEEP_ALIVE_INTERVAL_SEC);
+    SQAClientData dd(SQAUtil::SQAClientDealer, "Dealer",_agentsData[0]->sqaControlAddress,_agentsData[0]->sqaControlPort, "reg", 1, SQA_CONN_READ_TIMEOUT, SQA_CONN_WRITE_TIMEOUT, SQA_KEEP_ALIVE_INTERVAL_SEC);
     StateQueueClient* dealer = new StateQueueClient(dd._type, dd._applicationId, dd._serviceAddress, dd._servicePort, dd._zmqEventId, dd._poolSize);
 
     // TEST: Publisher started but cannot connect to agent (agent is not started yet)
@@ -402,7 +404,7 @@ public:
     CPPUNIT_ASSERT(!dealer->enqueue("reg-data"));
 
     // prepare watchers to local for events of type "reg"
-    SQAClientData wd(SQAUtil::ServiceWorker, "Worker", _agentsData[0]->sqaControlAddress, _agentsData[0]->sqaControlPort, "reg", 1, SQA_CONN_READ_TIMEOUT, SQA_CONN_WRITE_TIMEOUT, SQA_KEEP_ALIVE_INTERVAL_SEC);
+    SQAClientData wd(SQAUtil::SQAClientWorker, "Worker", _agentsData[0]->sqaControlAddress, _agentsData[0]->sqaControlPort, "reg", 1, SQA_CONN_READ_TIMEOUT, SQA_CONN_WRITE_TIMEOUT, SQA_KEEP_ALIVE_INTERVAL_SEC);
     StateQueueClient* worker = new StateQueueClient(wd._type, wd._applicationId, wd._serviceAddress, wd._servicePort, wd._zmqEventId, wd._poolSize);
 
     // TEST: Watcher started but cannot connect to agent (agent is not started yet)
@@ -458,15 +460,15 @@ public:
     boost::this_thread::sleep(boost::posix_time::milliseconds(100));
 
     // prepare publisher to local for events of type "reg"
-    SQAClientData dd(SQAUtil::ServiceDealer, "DealerLocal",_agentsData[0]->sqaControlAddress,_agentsData[0]->sqaControlPort, "reg1", 1, SQA_CONN_READ_TIMEOUT, SQA_CONN_WRITE_TIMEOUT, SQA_KEEP_ALIVE_INTERVAL_SEC);
+    SQAClientData dd(SQAUtil::SQAClientDealer, "DealerLocal",_agentsData[0]->sqaControlAddress,_agentsData[0]->sqaControlPort, "reg1", 1, SQA_CONN_READ_TIMEOUT, SQA_CONN_WRITE_TIMEOUT, SQA_KEEP_ALIVE_INTERVAL_SEC);
     StateQueueClient* dealer1 = new StateQueueClient(dd._type, dd._applicationId, dd._serviceAddress, dd._servicePort, dd._zmqEventId, dd._poolSize);
 
     // prepare watchers to local for events of type "reg"
-    SQAClientData dd2(SQAUtil::ServiceDealer, "DealerRemote",_agentsData[1]->sqaControlAddress,_agentsData[1]->sqaControlPort, "reg2", 1, SQA_CONN_READ_TIMEOUT, SQA_CONN_WRITE_TIMEOUT, SQA_KEEP_ALIVE_INTERVAL_SEC);
+    SQAClientData dd2(SQAUtil::SQAClientDealer, "DealerRemote",_agentsData[1]->sqaControlAddress,_agentsData[1]->sqaControlPort, "reg2", 1, SQA_CONN_READ_TIMEOUT, SQA_CONN_WRITE_TIMEOUT, SQA_KEEP_ALIVE_INTERVAL_SEC);
     StateQueueClient* dealer2 = new StateQueueClient(dd2._type, dd2._applicationId, dd2._serviceAddress, dd2._servicePort, dd2._zmqEventId, dd2._poolSize);
-    SQAClientData wdLocal(SQAUtil::ServiceWorkerMulti, "WorkerRemote", _agentsData[1]->sqaControlAddress, _agentsData[1]->sqaControlPort, "reg", 1, SQA_CONN_READ_TIMEOUT, SQA_CONN_WRITE_TIMEOUT, SQA_KEEP_ALIVE_INTERVAL_SEC);
-    SQAClientData wdRemote(SQAUtil::ServiceWorkerMulti, "WorkerRemote", _agentsData[0]->sqaControlAddress, _agentsData[0]->sqaControlPort, "reg", 1, SQA_CONN_READ_TIMEOUT, SQA_CONN_WRITE_TIMEOUT, SQA_KEEP_ALIVE_INTERVAL_SEC);
-    StateQueueClient* worker2 = new StateQueueClient(wdLocal._type, wdLocal._applicationId, wdLocal._serviceAddress, wdLocal._servicePort, wdLocal._zmqEventId, wdLocal._poolSize);
+    SQAClientData wdLocal(SQAUtil::SQAClientWorker, "WorkerRemote", _agentsData[1]->sqaControlAddressAll, _agentsData[1]->sqaControlPort, "reg", 1, SQA_CONN_READ_TIMEOUT, SQA_CONN_WRITE_TIMEOUT, SQA_KEEP_ALIVE_INTERVAL_SEC);
+    SQAClientData wdRemote(SQAUtil::SQAClientWorker, "WorkerRemote", _agentsData[0]->sqaControlAddressAll, _agentsData[0]->sqaControlPort, "reg", 1, SQA_CONN_READ_TIMEOUT, SQA_CONN_WRITE_TIMEOUT, SQA_KEEP_ALIVE_INTERVAL_SEC);
+    StateQueueClient* worker2 = new StateQueueClient(wdLocal._type, wdLocal._applicationId, _agentsData[0]->sqaControlAddressAll, wdLocal._servicePort, wdLocal._zmqEventId, wdLocal._poolSize);
 
     boost::this_thread::sleep(boost::posix_time::milliseconds(1500));
 
@@ -475,12 +477,13 @@ public:
 
     checkWorkerAfterStartup(*worker2, wdLocal, true);
 
-    CPPUNIT_ASSERT(worker2->startMultiService(_agentsData[0]->sqaControlAddressAll, _agentsData[0]->sqaControlPortAll));
+    //CPPUNIT_ASSERT(worker2->startMultiService(_agentsData[0]->sqaControlAddressAll, _agentsData[0]->sqaControlPortAll));
     boost::this_thread::sleep(boost::posix_time::milliseconds(100));
-    checkMSCoreAfterStartup(*worker2, 1, wdRemote, true);
+    checkMSCoreAfterStartup(*worker2, 0, wdRemote, true);
+    checkMSCoreAfterStartup(*worker2, 1, wdLocal, true);
 
-    checkRegularEnqueuePop(*dealer2, *worker2, "reg2", "reg2.data", 0);
-    checkRegularEnqueuePop(*dealer1, *worker2, "reg1", "reg1.data", 1);
+    checkRegularEnqueuePop(*dealer2, *worker2, "reg2", "reg2.data", 1);
+    checkRegularEnqueuePop(*dealer1, *worker2, "reg1", "reg1.data", 0);
 
     dealer1->terminate();
     checkSQAClientAfterStop(*dealer1);
@@ -506,36 +509,3 @@ public:
 
 
 CPPUNIT_TEST_SUITE_REGISTRATION(PublisherWatcherHATest);
-
-#if 0
-//***********************Dealer/Worker HA Test*********************************************
-DEFINE_TEST(TestDriver, TestDealerWorkerHA)
-{
-  g_driver->generateSQAAgentData(2);
-  SQAAgentData::Ptr agentData1 = g_driver->_agents[0];
-  SQAAgentData::Ptr agentData2 = g_driver->_agents[1];
-
-  g_driver->startSQAAgent(agentData1);
-  g_driver->startSQAAgent(agentData2);
-
-  // prepare dealer to local and remote for events of type "reg"
-  StateQueueClient dealer1(SQAUtil::ServiceDealer, "DealerLocal", agentData1->sqaControlAddress, agentData1->sqaControlPort, "reg", 1);
-  // prepare watchers to local and remote for events of type "reg"
-  StateQueueClient worker2(SQAUtil::ServiceWatcher, "DealerRemote", agentData2->sqaControlAddress, agentData2->sqaControlPort, "reg",  1);
-
-
-  boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
-
-  std::string workId;
-  std::string workData;
-
-  // TEST: Regular no-response publish / watch should work
-  ASSERT_COND(dealer1.enqueue("reg-data-1", 10));
-  ASSERT_COND(worker2.pop(workId, workData));
-  // TEST: External publish uses directly the eventId as messageId with no modifications
-  ASSERT_STR_EQ(workId, "sqa.reg");
-  //TODO: Verify that the eventId has the proper format with sqw.eventId.hex4-hex4
-  ASSERT_STR_EQ(workData, "reg-data-1");
-}
-#endif
-//***********************Dealer/Worker HA Test*********************************************

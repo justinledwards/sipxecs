@@ -1,11 +1,11 @@
 #include "sqa/SQAUtils.h"
 
-const int SQAUtil::ServiceUnknown = 0;
-const int SQAUtil::ServicePublisher = ServiceRolePublisher;
-const int SQAUtil::ServiceDealer =  ServiceRolePublisher | ServiceSpecDealer;
-const int SQAUtil::ServiceWatcher =  ServiceRoleWatcher;
-const int SQAUtil::ServiceWorker =  ServiceRoleWatcher | ServiceSpecWorker;
-const int SQAUtil::ServiceWorkerMulti =  ServiceRoleWatcher | ServiceSpecWorker | ServiceSpecMulti;
+//const int SQAUtil::SQAClientUnknown = 0;
+//const int SQAUtil::SQAClientPublisher = SQAClientRolePublisher;
+//const int SQAUtil::SQAClientDealer =  SQAClientRolePublisher | SQAClientRoleDealer;
+//const int SQAUtil::SQAClientWatcher =  SQAClientRoleWatcher;
+//const int SQAUtil::SQAClientWorker =  SQAClientRoleWatcher | SQAClientRoleWorker;
+//const int SQAUtil::SQAClientWorkerMulti =  SQAClientRoleWatcher | SQAClientRoleWorker | SQAClientRoleMulti;
 
 const char * connectionEventStr[] =
 {
@@ -16,28 +16,6 @@ const char * connectionEventStr[] =
     "logout",
     "terminate",
 };
-
-const char* SQAUtil::getServiceTypeStr(int serviceType)
-{
-  if (isDealer(serviceType))
-  {
-    return "dealer";
-  }
-  else if (isPublisherOnly(serviceType))
-  {
-    return "publisher";
-  }
-  if (isWorker(serviceType))
-  {
-    return "worker";
-  }
-  if (isWatcherOnly(serviceType))
-  {
-    return "watcher";
-  }
-
-  return "unknown";
-}
 
 const char* SQAUtil::getConnectionEventStr(ConnectionEvent connectionEvent)
 {

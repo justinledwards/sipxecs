@@ -424,22 +424,22 @@ inline int StateQueueMessage::getServiceType() const
 {
     if (!_pObject)
     {
-        return SQAUtil::ServiceUnknown;
+        return SQAUtil::SQAClientUnknown;
     }
 
-    if (_serviceType != SQAUtil::ServiceUnknown)
+    if (_serviceType != SQAUtil::SQAClientUnknown)
     {
         return _serviceType;
     }
 
-    _serviceType = SQAUtil::ServiceUnknown;
+    _serviceType = SQAUtil::SQAClientUnknown;
     try
     {
         cJSON *ssource = cJSON_GetObjectItem(_pObject,"message-serviceType");
 
         if (ssource || ssource->type != cJSON_String || !ssource->valuestring)
         {
-            _serviceType = SQAUtil::ServiceUnknown;
+            _serviceType = SQAUtil::SQAClientUnknown;
         }
         else
         {
@@ -448,19 +448,19 @@ inline int StateQueueMessage::getServiceType() const
 
             if ("dealer" == sserviceType)
             {
-              _serviceType = SQAUtil::ServiceDealer;
+              _serviceType = SQAUtil::SQAClientDealer;
             }
             else if ("publisher" == sserviceType)
             {
-              _serviceType = SQAUtil::ServicePublisher;
+              _serviceType = SQAUtil::SQAClientPublisher;
             }
             else if ("worker")
             {
-              _serviceType = SQAUtil::ServiceWorker;
+              _serviceType = SQAUtil::SQAClientWorker;
             }
             else if ("watcher")
             {
-              _serviceType = SQAUtil::ServiceWatcher;
+              _serviceType = SQAUtil::SQAClientWatcher;
             }
         }
 
@@ -477,7 +477,7 @@ inline void StateQueueMessage::setServiceType(int serviceType)
   _serviceType = serviceType;
 
   assert(_pObject);
-  std::string newServiceType = SQAUtil::getServiceTypeStr(serviceType);
+  std::string newServiceType = SQAUtil::getClientStr(serviceType);
 
   cJSON_DeleteItemFromObject(_pObject, "message-serviceType");
   cJSON_AddItemToObject(_pObject,"message-serviceType", cJSON_CreateString(newServiceType.c_str()));

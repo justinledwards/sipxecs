@@ -38,8 +38,11 @@ testsuite_LDADD = \
 	  -lev
 
 testsuite_SOURCES = \
+    StateQueueConnectionTest.cpp \
     SQAAgentUtil.cpp \
-    PublisherWatcherHA.cpp
+    PublisherWatcherHA.cpp \
+    SQAUtilTest.cpp
+    
 
 EXTRA_DIST =
 

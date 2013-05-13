@@ -100,7 +100,7 @@ public:
         const std::string& servicePort,
         const std::string& zmqEventId,
         std::size_t poolSize = 1) :
-                StateQueueClient(SQAUtil::ServiceWorker, applicationId, serviceAddress, servicePort, zmqEventId, poolSize),
+                StateQueueClient(SQAUtil::SQAClientWorker, applicationId, serviceAddress, servicePort, zmqEventId, poolSize),
                 _pThread(0),
                 total(0)
   {

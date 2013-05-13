@@ -158,7 +158,7 @@ DEFINE_TEST(TestDriver, TestWatcher)
   _pAgent->options().getOption("sqa-control-port", port);
 
   StateQueueClient* pPublisher = GET_RESOURCE(TestDriver, StateQueueClient*, "simple_publisher");
-  StateQueueClient watcher(SQAUtil::ServiceWatcher, "StateQueueDriverTest", address, port, "watcher-data", 1);
+  StateQueueClient watcher(SQAUtil::SQAClientWatcher, "StateQueueDriverTest", address, port, "watcher-data", 1);
 
   boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
 
@@ -177,7 +177,7 @@ DEFINE_TEST(TestDriver, TestPublishAndSet)
   _pAgent->options().getOption("sqa-control-address", address);
   _pAgent->options().getOption("sqa-control-port", port);
 
-  SQAPublisher publisher("TestPublishAndSet", address.c_str(), port.c_str(), false, 1, 100, 100);
+  SQAPublisher publisher("TestPublishAndSet", address.c_str(), port.c_str(), 1, 100, 100);
   SQAWatcher watcher("TestPublishAndSet", address.c_str(), port.c_str(), "pub&persist", 1, 100, 100);
   boost::this_thread::sleep(boost::posix_time::milliseconds(100));
   ASSERT_COND(publisher.publishAndSet(5, "pub&persist", "test-data", 10));
@@ -213,12 +213,11 @@ DEFINE_TEST(TestDriver, TestDealAndPublish)
   SQAWorker worker("TestDealAndPublish", address.c_str(), port.c_str(), "not", 1, 100, 100);
   boost::this_thread::sleep(boost::posix_time::milliseconds(100));
   ASSERT_COND(dealer.dealAndPublish("test-data", 20));
-  SQAEvent* pEvent = worker.fetchTask();
-  ASSERT_COND(pEvent);
-  ASSERT_STR_EQ(pEvent->data, "test-data");
-  delete pEvent;
-  pEvent = 0;
-  pEvent = watcher.watch();
+  SQAEventEx* pEventEx = worker.fetchTask();
+  ASSERT_COND(pEventEx);
+  ASSERT_STR_EQ(pEventEx->data, "test-data");
+  delete pEventEx;
+  SQAEvent* pEvent = watcher.watch();
   ASSERT_COND(pEvent);
   ASSERT_STR_EQ(pEvent->data, "test-data");
   delete pEvent;
@@ -305,7 +304,7 @@ DEFINE_TEST(TestDriver, TestPublishNoConnection)
     _pAgent->options().getOption("sqa-control-address", address);
     port="60000";
 
-    StateQueueClient* publisher = new StateQueueClient(SQAUtil::ServicePublisher, "TestPublisherPublishNoConnection", address, port, "reg", 2);
+    StateQueueClient* publisher = new StateQueueClient(SQAUtil::SQAClientPublisher, "TestPublisherPublishNoConnection", address, port, "reg", 2);
     boost::this_thread::sleep(boost::posix_time::milliseconds(100));
 
     //TEST: publish() should fail
@@ -326,13 +325,13 @@ DEFINE_TEST(TestDriver, TestPublishRestrictionToNonPublishers)
     _pAgent->options().getOption("sqa-control-port", port);
 
     //TEST: Worker is not allowed to do publish()
-    StateQueueClient* publisher = new StateQueueClient(SQAUtil::ServiceWorker, "TestPublishRestrictionToNonPublishers", address, port, "reg", 2);
+    StateQueueClient* publisher = new StateQueueClient(SQAUtil::SQAClientWorker, "TestPublishRestrictionToNonPublishers", address, port, "reg", 2);
     boost::this_thread::sleep(boost::posix_time::milliseconds(100));
     ASSERT_COND(!publisher->publish("dummy-event-id", "dummy-event-data", false));
     delete publisher;
 
     //TEST: Watcher is not allowed to publish()
-    publisher = new StateQueueClient(SQAUtil::ServiceWatcher, "TestPublishRestrictionToNonPublishers", address, port, "reg", 2);
+    publisher = new StateQueueClient(SQAUtil::SQAClientWatcher, "TestPublishRestrictionToNonPublishers", address, port, "reg", 2);
     boost::this_thread::sleep(boost::posix_time::milliseconds(100));
     ASSERT_COND(!publisher->publish("dummy-event-id", "dummy-event-data", false));
     delete publisher;
@@ -351,8 +350,8 @@ DEFINE_TEST(TestDriver, TestPublishRegularBehavior)
     _pAgent->options().getOption("sqa-control-port", port);
 
     // Prepare a publisher and a watcher
-    StateQueueClient* publisher = new StateQueueClient(SQAUtil::ServicePublisher, "TestPublishRegularBehavior", address, port, "reg", 2);
-    StateQueueClient watcher(SQAUtil::ServiceWatcher, "StateQueueDriverTest", address, port, "reg",  1);
+    StateQueueClient* publisher = new StateQueueClient(SQAUtil::SQAClientPublisher, "TestPublishRegularBehavior", address, port, "reg", 2);
+    StateQueueClient watcher(SQAUtil::SQAClientWatcher, "StateQueueDriverTest", address, port, "reg",  1);
     boost::this_thread::sleep(boost::posix_time::milliseconds(100));
 
     std::string eventId;
@@ -361,14 +360,14 @@ DEFINE_TEST(TestDriver, TestPublishRegularBehavior)
     // TEST: Regular no-response publish / watch should work
     ASSERT_COND(publisher->publish("reg", "regular-event-data", false));
     ASSERT_COND(watcher.watch(eventId, eventData));
-    ASSERT_COND(SQAUtil::validateId(eventId, SQAUtil::ServicePublisher, "reg"));
+    ASSERT_COND(SQAUtil::validateId(eventId, SQAUtil::SQAClientPublisher, "reg"));
     //TODO: Verify that the eventId has the proper format with sqw.eventId.hex4-hex4
     ASSERT_STR_EQ(eventData, "regular-event-data");
 
     // TEST: Regular with response publish / watch should work
     ASSERT_COND(publisher->publish("reg", "regular-event-data", true));
     ASSERT_COND(watcher.watch(eventId, eventData));
-    ASSERT_COND(SQAUtil::validateId(eventId, SQAUtil::ServicePublisher, "reg"));
+    ASSERT_COND(SQAUtil::validateId(eventId, SQAUtil::SQAClientPublisher, "reg"));
     ASSERT_STR_EQ(eventData, "regular-event-data");
 
     // TEST: Empty eventID should not be accepted for publish
@@ -400,10 +399,10 @@ DEFINE_TEST(TestDriver, TestPublishToExternalBehavior)
     _pAgent->options().getOption("sqa-control-port", port);
 
     // Prepare a publisher and a watcher
-    StateQueueClient* publisher = new StateQueueClient(SQAUtil::ServicePublisher | SQAUtil::ServiceSpecExternal, "TestPublishToExternalBehavior", address, port, "reg", 1);
-    StateQueueClient watcher(SQAUtil::ServiceWatcher, "StateQueueDriverTest", address, port, "reg", 1);
+    StateQueueClient* publisher = new StateQueueClient(SQAUtil::SQAClientPublisher, "TestPublishToExternalBehavior", address, port, "reg", 1);
+    StateQueueClient watcher(SQAUtil::SQAClientWatcher, "StateQueueDriverTest", address, port, "reg", 1);
     // Construct a second watcher for all event to watch for unexpected events
-    StateQueueClient watcherAll(SQAUtil::ServiceWatcher, "StateQueueDriverTest", address, port, "", 1);
+    StateQueueClient watcherAll(SQAUtil::SQAClientWatcher, "StateQueueDriverTest", address, port, "", 1);
     boost::this_thread::sleep(boost::posix_time::milliseconds(100));
 
     std::string eventId;
@@ -461,9 +460,9 @@ DEFINE_TEST(TestDriver, TestPublisherWatcherHA)
   //g_driver->startSQAAgent(agentData2);
 
   // prepare publisher to local and remote for events of type "reg"
-  StateQueueClient publisher1(SQAUtil::ServicePublisher, "PublisherLocal", agentData1->sqaControlAddress, agentData1->sqaControlPort, "reg", 1);
+  StateQueueClient publisher1(SQAUtil::SQAClientPublisher, "PublisherLocal", agentData1->sqaControlAddress, agentData1->sqaControlPort, "reg", 1);
   // prepare watchers to local and remote for events of type "reg"
-  //StateQueueClient watcher2(SQAUtil::ServiceWatcher, "WatcherRemote", agentData2->sqaControlAddress, agentData2->sqaControlPort, "reg", 1);
+  //StateQueueClient watcher2(SQAUtil::SQAClientWatcher, "WatcherRemote", agentData2->sqaControlAddress, agentData2->sqaControlPort, "reg", 1);
 
 
   boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
@@ -494,9 +493,9 @@ DEFINE_TEST(TestDriver, TestDealerWorkerHA)
   g_driver->startSQAAgent(agentData2);
 
   // prepare dealer to local and remote for events of type "reg"
-  StateQueueClient dealer1(SQAUtil::ServiceDealer, "DealerLocal", agentData1->sqaControlAddress, agentData1->sqaControlPort, "reg", 1);
+  StateQueueClient dealer1(SQAUtil::SQAClientDealer, "DealerLocal", agentData1->sqaControlAddress, agentData1->sqaControlPort, "reg", 1);
   // prepare watchers to local and remote for events of type "reg"
-  StateQueueClient worker2(SQAUtil::ServiceWatcher, "DealerRemote", agentData2->sqaControlAddress, agentData2->sqaControlPort, "reg",  1);
+  StateQueueClient worker2(SQAUtil::SQAClientWatcher, "DealerRemote", agentData2->sqaControlAddress, agentData2->sqaControlPort, "reg",  1);
 
 
   boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
@@ -518,96 +517,76 @@ DEFINE_TEST(TestDriver, TestDealerWorkerHA)
 //***********************SQAUtil Test*********************************************
 DEFINE_TEST(TestDriver, TestSQAUtil)
 {
-  ASSERT_COND(!SQAUtil::isPublisher(SQAUtil::ServiceUnknown));
-  ASSERT_COND(SQAUtil::isPublisher(SQAUtil::ServicePublisher));
-  ASSERT_COND(SQAUtil::isPublisher(SQAUtil::ServicePublisher | SQAUtil::ServiceSpecExternal));
-  ASSERT_COND(SQAUtil::isPublisher(SQAUtil::ServiceDealer));
-  ASSERT_COND(!SQAUtil::isPublisher(SQAUtil::ServiceWatcher));
-  ASSERT_COND(!SQAUtil::isPublisher(SQAUtil::ServiceWorker));
-  ASSERT_COND(!SQAUtil::isPublisher(SQAUtil::ServiceWorkerMulti));
+  ASSERT_COND(!SQAUtil::isPublisher(SQAUtil::SQAClientUnknown));
+  ASSERT_COND(SQAUtil::isPublisher(SQAUtil::SQAClientPublisher));
+  ASSERT_COND(SQAUtil::isPublisher(SQAUtil::SQAClientDealer));
+  ASSERT_COND(!SQAUtil::isPublisher(SQAUtil::SQAClientWatcher));
+  ASSERT_COND(!SQAUtil::isPublisher(SQAUtil::SQAClientWorker));
 
-  ASSERT_COND(!SQAUtil::isPublisherOnly(SQAUtil::ServiceUnknown));
-  ASSERT_COND(SQAUtil::isPublisherOnly(SQAUtil::ServicePublisher));
-  ASSERT_COND(SQAUtil::isPublisherOnly(SQAUtil::ServicePublisher | SQAUtil::ServiceSpecExternal));
-  ASSERT_COND(!SQAUtil::isPublisherOnly(SQAUtil::ServiceDealer));
-  ASSERT_COND(!SQAUtil::isPublisherOnly(SQAUtil::ServiceWatcher));
-  ASSERT_COND(!SQAUtil::isPublisherOnly(SQAUtil::ServiceWorker));
-  ASSERT_COND(!SQAUtil::isPublisherOnly(SQAUtil::ServiceWorkerMulti));
+  ASSERT_COND(!SQAUtil::isPublisherOnly(SQAUtil::SQAClientUnknown));
+  ASSERT_COND(SQAUtil::isPublisherOnly(SQAUtil::SQAClientPublisher));
+  ASSERT_COND(!SQAUtil::isPublisherOnly(SQAUtil::SQAClientDealer));
+  ASSERT_COND(!SQAUtil::isPublisherOnly(SQAUtil::SQAClientWatcher));
+  ASSERT_COND(!SQAUtil::isPublisherOnly(SQAUtil::SQAClientWorker));
 
-  ASSERT_COND(!SQAUtil::isDealer(SQAUtil::ServiceUnknown));
-  ASSERT_COND(!SQAUtil::isDealer(SQAUtil::ServicePublisher));
-  ASSERT_COND(SQAUtil::isDealer(SQAUtil::ServiceDealer));
-  ASSERT_COND(!SQAUtil::isDealer(SQAUtil::ServiceWatcher));
-  ASSERT_COND(!SQAUtil::isDealer(SQAUtil::ServiceWorker));
-  ASSERT_COND(!SQAUtil::isDealer(SQAUtil::ServiceWorkerMulti));
+  ASSERT_COND(!SQAUtil::isDealer(SQAUtil::SQAClientUnknown));
+  ASSERT_COND(!SQAUtil::isDealer(SQAUtil::SQAClientPublisher));
+  ASSERT_COND(SQAUtil::isDealer(SQAUtil::SQAClientDealer));
+  ASSERT_COND(!SQAUtil::isDealer(SQAUtil::SQAClientWatcher));
+  ASSERT_COND(!SQAUtil::isDealer(SQAUtil::SQAClientWorker));
 
-  ASSERT_COND(!SQAUtil::isWatcher(SQAUtil::ServiceUnknown));
-  ASSERT_COND(!SQAUtil::isWatcher(SQAUtil::ServicePublisher));
-  ASSERT_COND(!SQAUtil::isWatcher(SQAUtil::ServiceDealer));
-  ASSERT_COND(SQAUtil::isWatcher(SQAUtil::ServiceWatcher));
-  ASSERT_COND(SQAUtil::isWatcher(SQAUtil::ServiceWorker));
-  ASSERT_COND(SQAUtil::isWatcher(SQAUtil::ServiceWorkerMulti));
+  ASSERT_COND(!SQAUtil::isWatcher(SQAUtil::SQAClientUnknown));
+  ASSERT_COND(!SQAUtil::isWatcher(SQAUtil::SQAClientPublisher));
+  ASSERT_COND(!SQAUtil::isWatcher(SQAUtil::SQAClientDealer));
+  ASSERT_COND(SQAUtil::isWatcher(SQAUtil::SQAClientWatcher));
+  ASSERT_COND(SQAUtil::isWatcher(SQAUtil::SQAClientWorker));
 
-  ASSERT_COND(!SQAUtil::isWatcherOnly(SQAUtil::ServiceUnknown));
-  ASSERT_COND(!SQAUtil::isWatcherOnly(SQAUtil::ServicePublisher));
-  ASSERT_COND(!SQAUtil::isWatcherOnly(SQAUtil::ServiceDealer));
-  ASSERT_COND(SQAUtil::isWatcherOnly(SQAUtil::ServiceWatcher));
-  ASSERT_COND(!SQAUtil::isWatcherOnly(SQAUtil::ServiceWorker));
-  ASSERT_COND(!SQAUtil::isWatcherOnly(SQAUtil::ServiceWorkerMulti));
+  ASSERT_COND(!SQAUtil::isWatcherOnly(SQAUtil::SQAClientUnknown));
+  ASSERT_COND(!SQAUtil::isWatcherOnly(SQAUtil::SQAClientPublisher));
+  ASSERT_COND(!SQAUtil::isWatcherOnly(SQAUtil::SQAClientDealer));
+  ASSERT_COND(SQAUtil::isWatcherOnly(SQAUtil::SQAClientWatcher));
+  ASSERT_COND(!SQAUtil::isWatcherOnly(SQAUtil::SQAClientWorker));
 
-  ASSERT_COND(!SQAUtil::isWorker(SQAUtil::ServiceUnknown));
-  ASSERT_COND(!SQAUtil::isWorker(SQAUtil::ServicePublisher));
-  ASSERT_COND(!SQAUtil::isWorker(SQAUtil::ServiceDealer));
-  ASSERT_COND(!SQAUtil::isWorker(SQAUtil::ServiceWatcher));
-  ASSERT_COND(SQAUtil::isWorker(SQAUtil::ServiceWorker));
-  ASSERT_COND(SQAUtil::isWorker(SQAUtil::ServiceWorkerMulti));
+  ASSERT_COND(!SQAUtil::isWorker(SQAUtil::SQAClientUnknown));
+  ASSERT_COND(!SQAUtil::isWorker(SQAUtil::SQAClientPublisher));
+  ASSERT_COND(!SQAUtil::isWorker(SQAUtil::SQAClientDealer));
+  ASSERT_COND(!SQAUtil::isWorker(SQAUtil::SQAClientWatcher));
+  ASSERT_COND(SQAUtil::isWorker(SQAUtil::SQAClientWorker));
 
-  ASSERT_COND(!SQAUtil::isExternal(SQAUtil::ServicePublisher));
-  ASSERT_COND(SQAUtil::isExternal(SQAUtil::ServicePublisher | SQAUtil::ServiceSpecExternal));
-  ASSERT_COND(!SQAUtil::isExternal(SQAUtil::ServiceDealer));
-  ASSERT_COND(SQAUtil::isExternal(SQAUtil::ServicePublisher | SQAUtil::ServiceSpecExternal));
-
-  ASSERT_STR_EQ("unknown", SQAUtil::getServiceTypeStr(SQAUtil::ServiceUnknown));
-  ASSERT_STR_EQ("publisher", SQAUtil::getServiceTypeStr(SQAUtil::ServicePublisher));
-  ASSERT_STR_EQ("dealer", SQAUtil::getServiceTypeStr(SQAUtil::ServiceDealer));
-  ASSERT_STR_EQ("watcher", SQAUtil::getServiceTypeStr(SQAUtil::ServiceWatcher));
-  ASSERT_STR_EQ("worker", SQAUtil::getServiceTypeStr(SQAUtil::ServiceWorker));
-  ASSERT_STR_EQ("worker", SQAUtil::getServiceTypeStr(SQAUtil::ServiceWorkerMulti));
+  ASSERT_STR_EQ("unknown", SQAUtil::getClientStr(SQAUtil::SQAClientUnknown));
+  ASSERT_STR_EQ("publisher", SQAUtil::getClientStr(SQAUtil::SQAClientPublisher));
+  ASSERT_STR_EQ("dealer", SQAUtil::getClientStr(SQAUtil::SQAClientDealer));
+  ASSERT_STR_EQ("watcher", SQAUtil::getClientStr(SQAUtil::SQAClientWatcher));
+  ASSERT_STR_EQ("worker", SQAUtil::getClientStr(SQAUtil::SQAClientWorker));
 
   std::string zmqEventId;
   std::string eventId = "reg";
-  ASSERT_COND(SQAUtil::generateZmqEventId(zmqEventId, SQAUtil::ServiceWatcher, eventId));
+  ASSERT_COND(SQAUtil::generateZmqEventId(zmqEventId, SQAUtil::SQAClientWatcher, eventId));
   ASSERT_STR_EQ("sqw.reg", zmqEventId);
-  ASSERT_COND(SQAUtil::generateZmqEventId(zmqEventId, SQAUtil::ServiceWorker, eventId));
+  ASSERT_COND(SQAUtil::generateZmqEventId(zmqEventId, SQAUtil::SQAClientWorker, eventId));
   ASSERT_STR_EQ("sqa.reg", zmqEventId);
-  ASSERT_COND(SQAUtil::generateZmqEventId(zmqEventId, SQAUtil::ServiceWorkerMulti, eventId));
-  ASSERT_STR_EQ("sqa.reg", zmqEventId);
-  ASSERT_COND(!SQAUtil::generateZmqEventId(zmqEventId, SQAUtil::ServicePublisher, eventId));
-  ASSERT_COND(!SQAUtil::generateZmqEventId(zmqEventId, SQAUtil::ServiceDealer, eventId));
+  ASSERT_COND(!SQAUtil::generateZmqEventId(zmqEventId, SQAUtil::SQAClientPublisher, eventId));
+  ASSERT_COND(!SQAUtil::generateZmqEventId(zmqEventId, SQAUtil::SQAClientDealer, eventId));
 
 
   std::string id;
-  ASSERT_COND(SQAUtil::generateId(id, SQAUtil::ServicePublisher, "reg"));
+  ASSERT_COND(SQAUtil::generateId(id, SQAUtil::SQAClientPublisher, "reg"));
   ASSERT_STR_STARTS_WITH(id, "sqw.reg");
-  ASSERT_COND(SQAUtil::validateId(id, SQAUtil::ServicePublisher, "reg"));
+  ASSERT_COND(SQAUtil::validateId(id, SQAUtil::SQAClientPublisher, "reg"));
 
-  ASSERT_COND(SQAUtil::generateId(id, SQAUtil::ServiceDealer, "reg"));
+  ASSERT_COND(SQAUtil::generateId(id, SQAUtil::SQAClientDealer, "reg"));
   ASSERT_STR_STARTS_WITH(id, "sqa.reg");
-  ASSERT_COND(SQAUtil::validateId(id, SQAUtil::ServiceDealer, "reg"));
+  ASSERT_COND(SQAUtil::validateId(id, SQAUtil::SQAClientDealer, "reg"));
 
-  ASSERT_COND(SQAUtil::generateId(id, SQAUtil::ServiceWatcher, "reg"));
+  ASSERT_COND(SQAUtil::generateId(id, SQAUtil::SQAClientWatcher, "reg"));
   ASSERT_STR_STARTS_WITH(id, "sqw.reg");
-  ASSERT_COND(SQAUtil::validateId(id, SQAUtil::ServiceWatcher, "reg"));
+  ASSERT_COND(SQAUtil::validateId(id, SQAUtil::SQAClientWatcher, "reg"));
 
-  ASSERT_COND(SQAUtil::generateId(id, SQAUtil::ServiceWorker, "reg"));
+  ASSERT_COND(SQAUtil::generateId(id, SQAUtil::SQAClientWorker, "reg"));
   ASSERT_STR_STARTS_WITH(id, "sqa.reg");
-  ASSERT_COND(SQAUtil::validateId(id, SQAUtil::ServiceWorker, "reg"));
+  ASSERT_COND(SQAUtil::validateId(id, SQAUtil::SQAClientWorker, "reg"));
 
-  ASSERT_COND(SQAUtil::generateId(id, SQAUtil::ServiceWorkerMulti, "reg"));
-  ASSERT_STR_STARTS_WITH(id, "sqa.reg");
-  ASSERT_COND(SQAUtil::validateId(id, SQAUtil::ServiceWorkerMulti, "reg"));
-
-  ASSERT_COND(!SQAUtil::generateId(id, SQAUtil::ServiceUnknown, "reg"));
+  ASSERT_COND(!SQAUtil::generateId(id, SQAUtil::SQAClientUnknown, "reg"));
 
 
   //static bool validateId(const std::string &id, int serviceType);
@@ -639,8 +618,8 @@ bool StateQueueDriverTest::runTests()
   DEFINE_RESOURCE(TestDriver, "state_agent", &_agent);
   DEFINE_RESOURCE(TestDriver, "argc", _argc);
   DEFINE_RESOURCE(TestDriver, "argv", _argv);
-  DEFINE_RESOURCE(TestDriver, "simple_pop_client", new StateQueueClient(SQAUtil::ServiceWorker, "StateQueueDriverTest", address, port, "reg", 2));
-  DEFINE_RESOURCE(TestDriver, "simple_publisher", new StateQueueClient(SQAUtil::ServicePublisher, "StateQueueDriverTest", address, port, "reg", 2));
+  DEFINE_RESOURCE(TestDriver, "simple_pop_client", new StateQueueClient(SQAUtil::SQAClientWorker, "StateQueueDriverTest", address, port, "reg", 2));
+  DEFINE_RESOURCE(TestDriver, "simple_publisher", new StateQueueClient(SQAUtil::SQAClientPublisher, "StateQueueDriverTest", address, port, "reg", 2));
 
 
   boost::this_thread::sleep(boost::posix_time::milliseconds(1000));

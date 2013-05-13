@@ -174,13 +174,13 @@ public:
     const char* applicationId, // Unique application ID that will identify this watcher to SQA
     const char* serviceAddress, // The IP address of the SQA
     const char* servicePort, // The port where SQA is listening for connections
-    bool isExternal, // True, if the SQA agent is on another server
     int poolSize, // Number of active connections to SQA
     int readTimeout, // read timeout for the control socket
     int writeTimeout // write timeout for the control socket
   );
 
   SQAPublisher(
+    SQAClientUserApp user,
     const char* applicationId, // Unique application ID that will identify this watcher to SQA
     int poolSize, // Number of active connections to SQA
     int readTimeout, // read timeout for the control socket
@@ -270,13 +270,13 @@ public:
   // Returns the next event published by SQA.  This Function
   // will block if there is no event in queue
   //
-  SQAEvent* fetchTask();
+  SQAEventEx* fetchTask();
 
   //
   // Delete the task from the cache.  This must be called after fetchTask()
   // work is done
   //
-  void deleteTask(const char* id);
+  void deleteTask(const char* id, int serviceId);
 
   //
   // Set a value in the event queue workspace
@@ -310,63 +310,6 @@ private:
 };
 
 
-class SQAWorkerMultiService
-{
-public:
-  SQAWorkerMultiService(
-    const char* applicationId, // Unique application ID that will identify this watcher to SQA
-    const char* serviceAddressAll, // The IP address of the SQA
-    const char* servicePortAll, // The port where SQA is listening for connections
-    const char* eventId, // Event ID of the event being watched. Example: "sqa.not"
-    int poolSize, // Number of active connections to SQA
-    int readTimeout, // read timeout for the control socket
-    int writeTimeout // write timeout for the control socket
-  );
-
-  ~SQAWorkerMultiService();
-
-  //
-  // Returns the local IP address of the client
-  //
-  const char* getLocalAddress();
-
-  //
-  // Returns true if the client is connected to SQA
-  //
-  bool isConnected();
-  unsigned int getConnectedWorkersNum();
-
-  //
-  // Returns the id of internal workers
-  //
-  const char* getserviceId(const char* serviceAddress, const char* servicePort);
-
-  //
-  // Returns the next event published by SQA.  This Function
-  // will block if there is no event in queue
-  //
-  SQAEventEx* fetchTask();
-
-  //
-  // Delete the task from the cache.  This must be called after fetchTask()
-  // work is done
-  //
-  void deleteTask(const char* id, int serviceId);
-
-  //
-  // Set a value in the event queue workspace
-  //
-  void set(int workspace, const char* name, const char* data, int expires);
-  //
-  // Get a value from the event queue workspace
-  //
-  char* get(int workspace, const char* name);
-
-private:
-  SQAWorkerMultiService(const SQAWorkerMultiService& copy);
-  uintptr_t _connection;
-};
-
 class SQADealer
 {
 public:
@@ -381,6 +324,7 @@ public:
   );
 
   SQADealer(
+    SQAClientUserApp user,
     const char* applicationId, // Unique application ID that will identify this watcher to SQA
     const char* eventId, // Event ID of the event being watched. Example: "sqa.not"
     int poolSize, // Number of active connections to SQA
@@ -566,7 +510,7 @@ inline SQAWatcher::SQAWatcher(
 )
 {
   _connection = (uintptr_t)(new StateQueueClient(
-          SQAUtil::ServiceWatcher,
+          SQAUtil::SQAClientWatcher,
           applicationId,
           serviceAddress,
           servicePort,
@@ -585,7 +529,8 @@ inline SQAWatcher::SQAWatcher(
 )
 {
   _connection = (uintptr_t)(new StateQueueClient(
-          SQAUtil::ServiceWatcher,
+          SQAUtil::SQAClientWatcher,
+          SQAUserAppGeneric,
           applicationId,
           eventId,
           poolSize,
@@ -696,25 +641,24 @@ inline SQAPublisher::SQAPublisher(
   const char* applicationId, // Unique application ID that will identify this watcher to SQA
   const char* serviceAddress, // The IP address of the SQA
   const char* servicePort, // The port where SQA is listening for connections
-  bool isExternal, // True, if the SQA agent is on another server
   int poolSize, // Number of active connections to SQA
   int readTimeout, // read timeout for the control socket
   int writeTimeout // write timeout for the control socket
 )
 {
-  int externalSpec = (isExternal) ? SQAUtil::ServiceSpecExternal : 0;
   _connection = (uintptr_t)(new StateQueueClient(
-          SQAUtil::ServicePublisher | externalSpec,
+          SQAUtil::SQAClientPublisher,
           applicationId,
           serviceAddress,
           servicePort,
-          SQAUtil::getServiceTypeStr(SQAUtil::ServicePublisher),
+          SQAUtil::getClientStr(SQAUtil::SQAClientPublisher),
           poolSize,
           readTimeout,
           writeTimeout));
 }
 
 inline SQAPublisher::SQAPublisher(
+  SQAClientUserApp user,
   const char* applicationId, // Unique application ID that will identify this watcher to SQA
   int poolSize, // Number of active connections to SQA
   int readTimeout, // read timeout for the control socket
@@ -722,9 +666,10 @@ inline SQAPublisher::SQAPublisher(
 )
 {
   _connection = (uintptr_t)(new StateQueueClient(
-          SQAUtil::ServicePublisher,
+          SQAUtil::SQAClientPublisher,
+          user,
           applicationId,
-          SQAUtil::getServiceTypeStr(SQAUtil::ServicePublisher),
+          SQAUtil::getClientStr(SQAUtil::SQAClientPublisher),
           poolSize,
           readTimeout,
           writeTimeout));
@@ -834,7 +779,7 @@ inline SQADealer::SQADealer(
 )
 {
   _connection = (uintptr_t)(new StateQueueClient(
-          SQAUtil::ServiceDealer,
+          SQAUtil::SQAClientDealer,
           applicationId,
           serviceAddress,
           servicePort,
@@ -845,6 +790,7 @@ inline SQADealer::SQADealer(
 }
 
 inline SQADealer::SQADealer(
+  SQAClientUserApp user,
   const char* applicationId, // Unique application ID that will identify this watcher to SQA
   const char* eventId, // Event ID of the event being watched. Example: "sqa.not"
   int poolSize, // Number of active connections to SQA
@@ -853,7 +799,8 @@ inline SQADealer::SQADealer(
 )
 {
   _connection = (uintptr_t)(new StateQueueClient(
-          SQAUtil::ServiceDealer,
+          SQAUtil::SQAClientDealer,
+          user,
           applicationId,
           eventId,
           poolSize,
@@ -961,7 +908,7 @@ inline SQAWorker::SQAWorker(
 )
 {
   _connection = (uintptr_t)(new StateQueueClient(
-          SQAUtil::ServiceWorker,
+          SQAUtil::SQAClientWorker,
           applicationId,
           serviceAddress,
           servicePort,
@@ -980,7 +927,8 @@ inline SQAWorker::SQAWorker(
 )
 {
   _connection = (uintptr_t)(new StateQueueClient(
-          SQAUtil::ServiceWorker,
+          SQAUtil::SQAClientWorker,
+          SQAUserAppGeneric,
           applicationId,
           eventId,
           poolSize,
@@ -1007,24 +955,23 @@ inline bool SQAWorker::isConnected()
   return reinterpret_cast<StateQueueClient*>(_connection)->isConnected();
 }
 
-inline SQAEvent* SQAWorker::fetchTask()
+inline SQAEventEx* SQAWorker::fetchTask()
 {
+  int serviceId = 0;
   std::string id;
   std::string data;
-  int serviceId = 0;
-  SQAEvent* pEvent = 0;
+  SQAEventEx* pEvent = 0;
   if (!reinterpret_cast<StateQueueClient*>(_connection)->pop(id, data, serviceId))
     return pEvent;
 
-  pEvent = new SQAEvent(id, data);
+  pEvent = new SQAEventEx(id, data, serviceId);
 
   return pEvent;
 }
 
-
-inline void SQAWorker::deleteTask(const char* id)
+inline void SQAWorker::deleteTask(const char* id, int serviceId)
 {
-  reinterpret_cast<StateQueueClient*>(_connection)->erase(id, 0);
+  reinterpret_cast<StateQueueClient*>(_connection)->erase(id, serviceId);
 }
 
 inline void SQAWorker::set(int workspace, const char* name, const char* data, int expires)
@@ -1083,92 +1030,6 @@ inline std::map<std::string, std::string> SQAWorker::mgetAll(int workspace, cons
   if (!reinterpret_cast<StateQueueClient*>(_connection)->mgetm(workspace, name, smap));
   return smap;
 }
-
-
-//
-// Inline implementation for SQAWorkerMultiService class
-//
-inline SQAWorkerMultiService::SQAWorkerMultiService(
-  const char* applicationId, // Unique application ID that will identify this watcher to SQA
-  const char* serviceAddressAll, // The IP address of the SQA
-  const char* servicePortAll, // The port where SQA is listening for connections
-  const char* eventId, // Event ID of the event being watched. Example: "sqa.not"
-  int poolSize, // Number of active connections to SQA
-  int readTimeout, // read timeout for the control socket
-  int writeTimeout // write timeout for the control socket
-)
-{
-  _connection = (uintptr_t)(new StateQueueClient(
-          SQAUtil::ServiceWorkerMulti,
-          applicationId,
-          serviceAddressAll,
-          servicePortAll,
-          eventId,
-          poolSize,
-          readTimeout,
-          writeTimeout));
-}
-
-inline SQAWorkerMultiService::SQAWorkerMultiService(const SQAWorkerMultiService& copy)
-{
-}
-
-inline SQAWorkerMultiService::~SQAWorkerMultiService()
-{
-  delete reinterpret_cast<StateQueueClient*>(_connection);
-}
-
-//
-// Returns the local IP address of the client
-//
-inline const char* SQAWorkerMultiService::getLocalAddress()
-{
-  return reinterpret_cast<StateQueueClient*>(_connection)->getLocalAddress().c_str();
-}
-
-
-inline bool SQAWorkerMultiService::isConnected()
-{
-  return reinterpret_cast<StateQueueClient*>(_connection)->isConnected();
-}
-
-inline SQAEventEx* SQAWorkerMultiService::fetchTask()
-{
-  int serviceId = 0;
-  std::string id;
-  std::string data;
-  SQAEventEx* pEvent = 0;
-  if (!reinterpret_cast<StateQueueClient*>(_connection)->pop(id, data, serviceId))
-    return pEvent;
-
-  pEvent = new SQAEventEx(id, data, serviceId);
-
-  return pEvent;
-}
-
-inline void SQAWorkerMultiService::deleteTask(const char* id, int serviceId)
-{
-  reinterpret_cast<StateQueueClient*>(_connection)->erase(id, serviceId);
-}
-
-inline void SQAWorkerMultiService::set(int workspace, const char* name, const char* data, int expires)
-{
-  reinterpret_cast<StateQueueClient*>(_connection)->set(workspace, name, data, expires);
-}
-  //
-  // Get a value from the event queue workspace
-  //
-inline char* SQAWorkerMultiService::get(int workspace, const char* name)
-{
-  std::string data;
-  if (!reinterpret_cast<StateQueueClient*>(_connection)->get(workspace, name, data))
-    return 0;
-  char* buff = (char*)malloc(data.size() + 1);
-  ::memset(buff, 0x00, data.size() + 1);
-  ::memcpy(buff, data.c_str(), data.size() + 1);
-  return buff;
-}
-
 
 inline SQALogger::SQALogger()
 {
