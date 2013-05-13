@@ -15,10 +15,10 @@
 class PublisherWatcherHATest : public CppUnit::TestCase
 {
   CPPUNIT_TEST_SUITE(PublisherWatcherHATest);
-  //CPPUNIT_TEST(PublisherWatcherRegularBehaviorTest);
-  //CPPUNIT_TEST(OneLocalPublisherTwoHAAgentsOneRemoteWatcherTest);
-//  CPPUNIT_TEST(DealerWorkerRegularBehaviorTest);
-//  CPPUNIT_TEST(OneDealerAgentAgentOneWorkerTest);
+  CPPUNIT_TEST(PublisherWatcherRegularBehaviorTest);
+  CPPUNIT_TEST(OneLocalPublisherTwoHAAgentsOneRemoteWatcherTest);
+  CPPUNIT_TEST(DealerWorkerRegularBehaviorTest);
+  CPPUNIT_TEST(OneDealerAgentAgentOneWorkerTest);
   CPPUNIT_TEST_SUITE_END();
 
 
@@ -216,7 +216,6 @@ public:
 
   {
     checkStateQueueClientAfterStartup(watcher, cd, serviceIsUp);
-    checkSQAClientCoreAfterStartup(&watcher, watcher._core, cd, serviceIsUp);
   }
 
   void checkWorkerAfterStartup(StateQueueClient& worker,

@@ -23,8 +23,8 @@
 #include <cassert>
 #include <boost/thread.hpp>
 #include <zmq.hpp>
-#include "ServiceOptions.h"
-#include "sqaclient.h"
+#include "sqa/ServiceOptions.h"
+#include "sqa/sqaclient.h"
 
 class StateQueueNotification
 {

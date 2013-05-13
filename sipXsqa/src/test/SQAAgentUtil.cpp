@@ -18,7 +18,7 @@
 #include <iostream>
 #include "SQAAgentUtil.h"
 
-const char* g_sqaAddress[] = {"192.168.13.2", "192.168.13.200", "192.168.13.201"};
+const char* g_sqaAddress[] = {"192.168.1.57", "192.168.1.200", "192.168.1.201"};
 
 const unsigned int g_defaultSqaControlPort = 6240;
 const unsigned int g_defaultZmqSubscriptionPort = 6242;

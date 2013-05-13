@@ -16,7 +16,7 @@
 class StateQueueConnectionTest : public CppUnit::TestCase
 {
     CPPUNIT_TEST_SUITE(StateQueueConnectionTest);
-    CPPUNIT_TEST(consumeOKTest);
+//    CPPUNIT_TEST(consumeOKTest);
     CPPUNIT_TEST_SUITE_END();
 
     struct Packet

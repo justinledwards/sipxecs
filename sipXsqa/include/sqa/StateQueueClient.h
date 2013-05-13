@@ -328,7 +328,7 @@ public:
         int readTimeout = SQA_CONN_READ_TIMEOUT,
         int writeTimeout = SQA_CONN_WRITE_TIMEOUT,
         int keepAliveTicks = SQA_KEEP_ALIVE_INTERVAL_SEC
-        ) ;
+        );
 
   StateQueueClient(
         int type,
@@ -339,7 +339,7 @@ public:
         int readTimeout = SQA_CONN_READ_TIMEOUT,
         int writeTimeout = SQA_CONN_WRITE_TIMEOUT,
         int keepAliveTicks = SQA_KEEP_ALIVE_INTERVAL_SEC
-        ) ;
+        );
 
   ~StateQueueClient();
 
