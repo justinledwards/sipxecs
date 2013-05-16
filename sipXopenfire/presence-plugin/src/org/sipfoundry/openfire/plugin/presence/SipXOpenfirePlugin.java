@@ -1049,7 +1049,6 @@ public class SipXOpenfirePlugin implements Plugin, Component {
                 new ConferenceInformation(conferenceName, conferenceExtension, password, conferenceReachabilityInfo));
 
     }
-
     /**
      * Delete a chat room from the domain.
      *
