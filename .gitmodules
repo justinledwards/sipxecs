@@ -4,6 +4,9 @@
 [submodule "OpenACD"]
 	path = OpenACD
 	url = git://github.com/OpenACD/OpenACD.git
+[submodule "sipXcustomCallerId"]
+	path = sipXcustomCallerId
+	url = git://github.com/ezuce/sipXcustomCallerId
 [submodule "homer"]
 	path = homer
 	url = http://code.google.com/p/homer/

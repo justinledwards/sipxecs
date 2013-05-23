@@ -41,6 +41,7 @@ sipx_core = \
 # sipxecs projects that are NOT essential for a running communication system
 sipx_extra = \
   sipXacccode \
+  sipXcustomCallerId \
   sipXopenacd \
   sipXviewer \
   sipXimbot \
@@ -161,6 +162,7 @@ sipXtackLib_DEPS = $(call deps,sipXportLib)
 sipXmediaLib_DEPS = $(call deps,sipXtackLib)
 sipXmediaAdapterLib_DEPS = $(call deps,sipXmediaLib)
 sipXcallLib_DEPS = $(call deps,sipXmediaAdapterLib)
+sipXcustomCallerId_DEPS = $(call deps,sipXconfig)
 sipXsupervisor_DEPS = $(call deps,sec cfengine rubygem-net-sftp)
 sipXmongo_DEPS = $(call deps,mongodb sipXsupervisor)
 sipXcommserverLib_DEPS = $(call deps,sipXsupervisor sipXtackLib sipXmongo sipXsnmp)
