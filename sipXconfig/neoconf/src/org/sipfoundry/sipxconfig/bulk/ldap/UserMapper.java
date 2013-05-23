@@ -32,7 +32,7 @@ import org.apache.commons.lang.StringUtils;
 import org.sipfoundry.sipxconfig.bulk.UserPreview;
 import org.sipfoundry.sipxconfig.bulk.csv.Index;
 import org.sipfoundry.sipxconfig.common.User;
-import org.springframework.ldap.NameClassPairMapper;
+import org.springframework.ldap.core.NameClassPairMapper;
 
 public class UserMapper implements NameClassPairMapper {
     private LdapManager m_ldapManager;

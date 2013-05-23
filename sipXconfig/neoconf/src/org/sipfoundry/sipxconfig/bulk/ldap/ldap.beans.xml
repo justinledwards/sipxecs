@@ -108,6 +108,7 @@
       <ref local="ldapManager" />
     </property>
     <property name="previewSize" value="10" />
+    <property name="pageImportSize" value="1000" />
     <property name="templateFactory" ref="ldapTemplateFactory" />
   </bean>
 
