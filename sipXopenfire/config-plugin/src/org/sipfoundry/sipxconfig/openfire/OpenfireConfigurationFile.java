@@ -132,10 +132,11 @@ public class OpenfireConfigurationFile {
      */
     protected String getAuthorizedUsernames() {
         List<User> admins = m_coreContext.loadUserByAdmin();
+        String domainName = m_coreContext.getDomainName();
         Set<String> authorizedList = new TreeSet<String>();
         authorizedList.add(AbstractUser.SUPERADMIN);
         for (User user : admins) {
-            authorizedList.add(user.getUserName());
+            authorizedList.add(user.getUserName() + "@" + domainName);
         }
         return StringUtils.join(authorizedList, SEPARATOR);
     }
