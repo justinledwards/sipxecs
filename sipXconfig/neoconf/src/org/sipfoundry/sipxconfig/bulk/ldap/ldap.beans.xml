@@ -17,7 +17,6 @@
         </entry>
         <entry key="firstName" value="givenName" />
         <entry key="lastName" value="sn" />
-        <entry key="aliasesString" value="sAMAccountName" />
         <entry key="emailAddress" value="mail" />
         <entry key="userGroupName" value="ou" />
         <entry key="imId" value="sAMAccountName" />
@@ -76,12 +75,14 @@
     <property name="ldapManager">
       <ref local="ldapManager" />
     </property>
+    <property name="permissionManager" ref="permissionManager" />
   </bean>
 
   <bean id="ldapUserMapper" class="org.sipfoundry.sipxconfig.bulk.ldap.UserMapper" scope="prototype">
     <property name="ldapManager">
       <ref local="ldapManager" />
     </property>
+    <property name="permissionManager" ref="permissionManager" />
   </bean>
 
   <bean id="ldapTemplateFactory" class="org.sipfoundry.sipxconfig.bulk.ldap.LdapTemplateFactory" />

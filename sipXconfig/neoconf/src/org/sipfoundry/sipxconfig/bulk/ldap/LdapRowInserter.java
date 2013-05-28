@@ -27,9 +27,11 @@ import org.sipfoundry.sipxconfig.common.UserException;
 import org.sipfoundry.sipxconfig.common.UserValidationUtils;
 import org.sipfoundry.sipxconfig.conference.ConferenceBridgeContext;
 import org.sipfoundry.sipxconfig.forwarding.ForwardingContext;
+import org.sipfoundry.sipxconfig.permission.PermissionManager;
 import org.sipfoundry.sipxconfig.setting.Group;
 import org.sipfoundry.sipxconfig.setting.GroupAutoAssign;
 import org.sipfoundry.sipxconfig.vm.MailboxManager;
+import org.springframework.beans.factory.annotation.Required;
 
 /**
  * Specialized version of row inserter for inserting users from LDAP searches LdapRowinserter
@@ -40,6 +42,7 @@ public class LdapRowInserter extends RowInserter<SearchResult> {
     private LdapManager m_ldapManager;
     private ConferenceBridgeContext m_conferenceBridgeContext;
     private CoreContext m_coreContext;
+    private PermissionManager m_permissionManager;
     private ForwardingContext m_forwardingContext;
     private MailboxManager m_mailboxManager;
     private Set<String> m_existingUserNames;
@@ -96,7 +99,7 @@ public class LdapRowInserter extends RowInserter<SearchResult> {
                 user = m_coreContext.newUser();
                 user.setUserName(userName);
             }
-
+            user.setPermissionManager(m_permissionManager);
             // disable user email notification
             user.setNotified(true);
 
@@ -225,5 +228,10 @@ public class LdapRowInserter extends RowInserter<SearchResult> {
 
     public void setDomain(String domain) {
         m_domain = domain;
+    }
+
+    @Required
+    public void setPermissionManager(PermissionManager permissionManager) {
+        m_permissionManager = permissionManager;
     }
 }

@@ -30,17 +30,17 @@ import org.apache.commons.beanutils.BeanUtils;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.RandomStringUtils;
 import org.apache.commons.lang.StringUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.sipfoundry.sipxconfig.bulk.UserPreview;
 import org.sipfoundry.sipxconfig.bulk.csv.Index;
 import org.sipfoundry.sipxconfig.common.User;
+import org.sipfoundry.sipxconfig.permission.PermissionManager;
+import org.springframework.beans.factory.annotation.Required;
 import org.springframework.ldap.core.NameClassPairMapper;
 
 public class UserMapper implements NameClassPairMapper {
     private LdapManager m_ldapManager;
+    private PermissionManager m_permissionManager;
     private AttrMap m_attrMap;
-    public static final Log LOG = LogFactory.getLog(LdapImportManager.class);
     /**
      * @return UserPreview
      */
@@ -49,6 +49,7 @@ public class UserMapper implements NameClassPairMapper {
         SearchResult searchResult = (SearchResult) nameClass;
         Attributes attrs = searchResult.getAttributes();
         User user = new User();
+        user.setPermissionManager(m_permissionManager);
         List<String> groupNames = new ArrayList<String>(getGroupNames(searchResult));
 
         setUserProperties(user, attrs);
@@ -92,6 +93,7 @@ public class UserMapper implements NameClassPairMapper {
         setProperty(user, attrs, Index.OFFICE_STATE);
         setProperty(user, attrs, Index.OFFICE_COUNTRY);
         setProperty(user, attrs, Index.OFFICE_ZIP);
+        setProperty(user, attrs, Index.EXTERNAL_NUMBER);
     }
 
     public void setAliasesSet(Set<String> aliases, User user) {
@@ -341,5 +343,10 @@ public class UserMapper implements NameClassPairMapper {
 
     public void setLdapManager(LdapManager ldapManager) {
         m_ldapManager = ldapManager;
+    }
+
+    @Required
+    public void setPermissionManager(PermissionManager permissionManager) {
+        m_permissionManager = permissionManager;
     }
 }
