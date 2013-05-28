@@ -24,8 +24,6 @@ import java.util.TreeMap;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.functors.NotNullPredicate;
 import org.apache.commons.lang.StringUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.sipfoundry.sipxconfig.bulk.csv.Index;
 import org.sipfoundry.sipxconfig.common.BeanWithId;
 
@@ -34,7 +32,6 @@ import org.sipfoundry.sipxconfig.common.BeanWithId;
  */
 public class AttrMap extends BeanWithId {
     private static final String SEPARATOR = "|";
-    public static final Log LOG = LogFactory.getLog(LdapImportManager.class);
 
     private Map<String, String> m_user2ldap = new TreeMap<String, String>();
 
@@ -89,7 +86,7 @@ public class AttrMap extends BeanWithId {
         CollectionUtils.filter(attrs, NotNullPredicate.INSTANCE);
         //we can have multiple attributes values assigned for a user field (alias for example)
         //In DB, table ldap_user_property_to_ldap_attr  these values are saved like this: audio|mobile|ipphone
-        List<String> attrsList = new ArrayList<String> ();
+        List<String> attrsList = new ArrayList<String>();
         for (String attr : attrs) {
             if (!isEmpty(attr)) {
                 attrsList.addAll(Arrays.asList(split(attr, SEPARATOR)));
@@ -188,9 +185,9 @@ public class AttrMap extends BeanWithId {
      * @return
      */
     public List<String> getAttributes(String field) {
-       String joinedAttrs = m_user2ldap.get(field);
-       return isEmpty(joinedAttrs) ? new ArrayList<String> () :
-               new ArrayList<String>(Arrays.asList(split(joinedAttrs, SEPARATOR)));
+        String joinedAttrs = m_user2ldap.get(field);
+        return isEmpty(joinedAttrs) ? new ArrayList<String>()
+               : new ArrayList<String>(Arrays.asList(split(joinedAttrs, SEPARATOR)));
     }
 
     /**

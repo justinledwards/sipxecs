@@ -39,10 +39,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.logging.LogFactory;
 import org.sipfoundry.commons.security.Md5Encoder;
 import org.sipfoundry.commons.userdb.profile.UserProfile;
 import org.sipfoundry.sipxconfig.address.AddressManager;
 import org.sipfoundry.sipxconfig.branch.Branch;
+import org.sipfoundry.sipxconfig.bulk.ldap.LdapImportManager;
 import org.sipfoundry.sipxconfig.domain.DomainManager;
 import org.sipfoundry.sipxconfig.forwarding.ForwardingContext;
 import org.sipfoundry.sipxconfig.moh.MohAddressFactory;
@@ -56,6 +58,7 @@ import org.sipfoundry.sipxconfig.setting.Group;
 import org.sipfoundry.sipxconfig.setting.Setting;
 import org.sipfoundry.sipxconfig.setting.SettingEntry;
 import org.sipfoundry.sipxconfig.time.NtpManager;
+import org.apache.commons.logging.Log;
 
 /**
  * Can be user that logs in, can be superadmin, can be user for phone line
@@ -81,6 +84,7 @@ public abstract class AbstractUser extends BeanWithGroups {
     public static final String CALLFWD_TIMER = "callfwd/timer";
     public static final String OPERATOR_SETTING = "personal-attendant/operator";
     public static final String DEFAULT_VM_OPTION = "personal-attendant/default-vm-option";
+    public static final Log LOG = LogFactory.getLog(LdapImportManager.class);
 
     public static enum MohAudioSource {
         FILES_SRC, PERSONAL_FILES_SRC, SOUNDCARD_SRC, SYSTEM_DEFAULT, NONE;
